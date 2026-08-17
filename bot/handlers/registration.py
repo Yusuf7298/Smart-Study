@@ -8,6 +8,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 import config
 from bot.services import student_service
 from bot.services.i18n import t
+from bot.utils import safe_edit, safe_reply
 
 router = Router()
 
@@ -83,9 +84,13 @@ async def process_name(message: Message, state: FSMContext):
         reply_markup=get_grades_keyboard()
     )
 
-@router.callback_query(F.data.startswith("reg_grade_"), RegistrationStates.waiting_for_grade)
+@router.callback_query(F.data.startswith("reg_grade_"))
 async def process_grade_callback(callback: CallbackQuery, state: FSMContext):
     """Processes student grade selection callback and asks for preferred language."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     telegram_id = callback.from_user.id
     grade_val = callback.data.split("reg_grade_")[1]
     
@@ -94,37 +99,39 @@ async def process_grade_callback(callback: CallbackQuery, state: FSMContext):
     if student and student.approval_status == 'APPROVED':
         await student_service.update_grade(telegram_id, grade_val)
         await state.clear()
-        lang = student.preferred_language or "English"
-        await callback.message.edit_text(f"✅ Grade level updated to *Grade {grade_val}*!", parse_mode="Markdown")
-        await callback.answer()
+        await safe_edit(callback.message, f"✅ Grade level updated to Grade {grade_val}!")
+        from bot.handlers.start import send_student_dashboard
+        await send_student_dashboard(callback.message, telegram_id)
         return
         
     await state.update_data(grade=grade_val)
     await state.set_state(RegistrationStates.waiting_for_language)
     
-    await callback.message.edit_text(
-        "🌐 *Select your preferred language:*",
-        parse_mode="Markdown",
+    await safe_edit(
+        callback.message,
+        "🌐 Select your preferred language:",
         reply_markup=get_languages_keyboard()
     )
-    await callback.answer()
 
-@router.callback_query(F.data.startswith("reg_lang_"), RegistrationStates.waiting_for_language)
+@router.callback_query(F.data.startswith("reg_lang_"))
 async def process_language_callback(callback: CallbackQuery, state: FSMContext):
-    """Processes language selection callback and shows summary verification card."""
+    """Processes language selection callback and shows summary verification card or updates student language."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     telegram_id = callback.from_user.id
     lang_val = callback.data.split("reg_lang_")[1]
     
-    # Check if student is already an approved student updating their language via profile
+    # Check if student is already an approved student updating their language via profile/main menu
     student = await student_service.get_student(telegram_id)
     if student and student.approval_status == 'APPROVED':
         await student_service.update_language(telegram_id, lang_val)
         await state.clear()
         
         from bot.handlers.start import send_student_dashboard
-        await callback.message.edit_text(f"✅ Language updated to *{lang_val}*!", parse_mode="Markdown")
+        await safe_edit(callback.message, f"✅ Language updated to {lang_val}!")
         await send_student_dashboard(callback.message, telegram_id)
-        await callback.answer()
         return
         
     await state.update_data(language=lang_val)
@@ -139,12 +146,11 @@ async def process_language_callback(callback: CallbackQuery, state: FSMContext):
         language=lang_val
     )
     
-    await callback.message.edit_text(
+    await safe_edit(
+        callback.message,
         summary,
-        parse_mode="Markdown",
         reply_markup=get_confirm_keyboard(lang_val)
     )
-    await callback.answer()
 
 @router.callback_query(F.data == "reg_confirm_cancel", RegistrationStates.waiting_for_confirm)
 async def process_cancel_callback(callback: CallbackQuery, state: FSMContext):

@@ -109,7 +109,6 @@ async def action_test_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.message(ActionStates.waiting_for_test_answer)
 async def process_test_answer(message: Message, state: FSMContext):
-    """Evaluates student's written test answers and stores the results."""
     telegram_id = message.from_user.id if message.from_user else None
     if not telegram_id:
         return
@@ -133,7 +132,7 @@ async def process_test_answer(message: Message, state: FSMContext):
             await gemini_service.grade_written_test(
                 questions_text=questions,
                 student_answers=message.text or "",
-                student=student,
+                student=student, # type: ignore
                 subject=subject,
                 topic=topic
             )
@@ -161,7 +160,7 @@ async def process_test_answer(message: Message, state: FSMContext):
         await safe_edit(
             thinking,
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💯 *Test Evaluation Results*\n"
+            f"💯 Test Evaluation Results\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"{feedback}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -226,7 +225,7 @@ async def short_note_start(message: Message, telegram_id: Optional[int] = None):
         
         await safe_edit(
             thinking,
-            f"📖 *Short Notes: {learning_session.topic}*\n"
+            f"📖 Short Notes: {learning_session.topic}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"{note_content.strip()}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -267,9 +266,9 @@ async def personalize_start(message: Message, telegram_id: Optional[int] = None)
     ])
     await safe_reply(
         message,
-        f"⚙️ *Personalization & Learning Profile*\n\n"
-        f"👤 *Grade Level:* {student.grade or 'Not Set'}\n"
-        f"🌐 *Language:* {student.preferred_language or 'English'}\n\n"
+        f"⚙️ Personalization & Learning Profile\n\n"
+        f"👤 Grade Level: {student.grade or 'Not Set'}\n"
+        f"🌐 Language: {student.preferred_language or 'English'}\n\n"
         f"Select an option below to update your settings:",
         reply_markup=kb
     )
@@ -292,25 +291,31 @@ async def menu_language_callback(callback: CallbackQuery):
         pass
     await change_lang_callback(callback)
 
-@router.callback_query(F.data == "change_grade", StateFilter(None))
+@router.callback_query(F.data == "change_grade")
 async def change_grade_callback(callback: CallbackQuery):
     """Displays grade selection keyboard for personalization."""
-    await callback.message.edit_text(
-        "🎓 *Select your new grade level:*",
-        parse_mode="Markdown",
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    await safe_edit(
+        callback.message, # type: ignore
+        "🎓 Select your new grade level:",
         reply_markup=get_grades_keyboard()
     )
-    await callback.answer()
 
-@router.callback_query(F.data == "change_lang", StateFilter(None))
+@router.callback_query(F.data == "change_lang")
 async def change_lang_callback(callback: CallbackQuery):
     """Displays language selection keyboard for personalization."""
-    await callback.message.edit_text(
-        "🌐 *Select your preferred language:*",
-        parse_mode="Markdown",
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    await safe_edit(
+        callback.message, # type: ignore
+        "🌐 Select your preferred language:",
         reply_markup=get_languages_keyboard()
     )
-    await callback.answer()
 
 @router.message(Command("test_history"), StateFilter(None))
 async def test_history_start(message: Message, telegram_id: Optional[int] = None):
@@ -328,18 +333,18 @@ async def test_history_start(message: Message, telegram_id: Optional[int] = None
     if not results:
         await safe_reply(
             message,
-            "📝 *Written Test History*\n\n"
+            "📝 Written Test History\n\n"
             "You haven't taken any written tests yet.\n"
             "Use /test to take your first test!"
         )
         return
         
-    lines = ["📝 *Recent Written Test Results:*\n━━━━━━━━━━━━━━━━━━━━"]
+    lines = ["📝 Recent Written Test Results:\n━━━━━━━━━━━━━━━━━━━━"]
     for r in results:
         time_str = r.created_at.strftime("%Y-%m-%d") if r.created_at else "Recent"
         lines.append(
-            f"• *{r.subject} → {r.topic}*\n"
-            f"  Score: *{r.score}/{r.max_score}* (Grade: *{r.letter_grade}*) | Date: {time_str}\n"
+            f"• {r.subject} → {r.topic}\n"
+            f"  Score: {r.score}/{r.max_score} (Grade: {r.letter_grade}) | Date: {time_str}\n"
             f"  Feedback: _{r.feedback[:100]}..._\n"
         )
         

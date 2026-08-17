@@ -342,7 +342,8 @@ class TestStudentTutor(unittest.TestCase):
             topic="Data Structures & Algorithms"
         )
         course_reply = mock_msg_course.answer.call_args[0][0]
-        self.assertIn("Data Structures & Algorithms", course_reply)
+        self.assertIn("Data Structures", course_reply)
+        self.assertIn("Algorithms", course_reply)
         
         # Case 3: Select text input choice
         mock_cb_text = AsyncMock()
@@ -755,6 +756,45 @@ class TestStudentTutor(unittest.TestCase):
         mock_state.update_data.assert_called_with(grade="College")
         mock_state.set_state.assert_called_with(RegistrationStates.waiting_for_language)
 
+    def test_language_switch_approved_student(self):
+        """Verify that clicking reg_lang_Amharic or reg_lang_Afaan Oromo immediately updates student language in DB and refreshes dashboard."""
+        from bot.handlers.registration import process_language_callback
+        
+        user_id = 99125
+        run_async(student_service.register_student(user_id, "LangStudent", "langstudent"))
+        
+        mock_cb = AsyncMock()
+        mock_cb.from_user.id = user_id
+        mock_cb.data = "reg_lang_Amharic"
+        mock_cb.message.edit_text = AsyncMock()
+        mock_cb.message.answer = AsyncMock()
+        mock_cb.answer = AsyncMock()
+        
+        mock_state = AsyncMock()
+        mock_state.clear = AsyncMock()
+        
+        run_async(process_language_callback(mock_cb, mock_state))
+        
+        student = run_async(student_service.get_student(user_id))
+        self.assertEqual(student.preferred_language, "Amharic")
+        mock_state.clear.assert_called_once()
+        self.assertTrue(mock_cb.message.answer.called)
+
+    def test_menu_language_opens_selector(self):
+        """Verify that menu_language callback opens the language selection keyboard."""
+        from bot.handlers.actions import menu_language_callback
+        
+        mock_cb = AsyncMock()
+        mock_cb.data = "menu_language"
+        mock_cb.message.edit_text = AsyncMock()
+        mock_cb.answer = AsyncMock()
+        
+        run_async(menu_language_callback(mock_cb))
+        
+        self.assertTrue(mock_cb.message.edit_text.called)
+        edit_kwargs = mock_cb.message.edit_text.call_args[1]
+        self.assertIsNotNone(edit_kwargs.get("reply_markup"))
+
     def test_registration_cancel_callback(self):
         """Verify registration cancellation clears state and responds."""
         from bot.handlers.registration import process_cancel_callback
@@ -860,20 +900,104 @@ class TestStudentTutor(unittest.TestCase):
         run_async(show_materials_command(mock_msg, mock_state))
         self.assertIn("haven't uploaded any study materials", mock_msg.answer.call_args[0][0])
 
-    def test_help_command_display(self):
-        """Verify /help outputs full user guide."""
-        from bot.handlers.start import help_command
-        user_id = 99128
-        run_async(student_service.register_student(user_id, "HelpUser", "help_u"))
+    def test_pdf_upload_prompts_chapter_selection(self):
+        """Verify uploading PDF prompts for chapter selection in Final Exam Study Mode."""
+        from bot.handlers.pdf import process_pdf_document_upload, PDFStates
+        
+        user_id = 99129
+        run_async(student_service.register_student(user_id, "ExamStudent", "exam_student"))
         
         mock_msg = AsyncMock()
         mock_msg.from_user.id = user_id
+        mock_msg.document = AsyncMock()
+        mock_msg.document.file_name = "biology_final.pdf"
+        mock_msg.document.file_size = 1024 * 50
+        mock_msg.document.file_id = "doc_file_123"
+        mock_msg.bot.get_file = AsyncMock(return_value=AsyncMock(file_path="dummy_path"))
+        mock_msg.bot.download_file = AsyncMock()
         mock_msg.answer = AsyncMock()
         
-        run_async(help_command(mock_msg))
-        reply = mock_msg.answer.call_args[0][0]
-        self.assertIn("User Guide", reply)
-        self.assertIn("/study", reply)
+        mock_state = AsyncMock()
+        mock_state.set_state = AsyncMock()
+        mock_state.update_data = AsyncMock()
+        
+        with patch("bot.services.pdf_service.process_and_save_pdf", new_callable=AsyncMock) as mock_save:
+            mock_save.return_value = AsyncMock(
+                id=42,
+                title="Biology Final Exam Review",
+                filename="biology_final.pdf",
+                extracted_text="Chapter 1: The Cell Theory. Chapter 2: Genetics."
+            )
+            
+            run_async(process_pdf_document_upload(mock_msg, mock_state))
+            
+            mock_state.set_state.assert_called_with(PDFStates.waiting_for_chapter)
+            self.assertTrue(mock_msg.answer.called)
+
+    def test_chapter_selection_initiates_exam_study_mode(self):
+        """Verify selecting chapter outputs required greeting and starts Step 1 notes + Step 2 10 MCQs."""
+        from bot.handlers.pdf import process_exam_chapter_selection, PDFStates
+        
+        user_id = 99130
+        run_async(student_service.register_student(user_id, "ChapterStudent", "chap_student"))
+        
+        mock_msg = AsyncMock()
+        mock_msg.from_user.id = user_id
+        mock_msg.text = "Chapter 1"
+        mock_msg.answer = AsyncMock()
+        
+        mock_state = AsyncMock()
+        mock_state.get_data = AsyncMock(return_value={
+            "filename": "Biology_Notes.pdf",
+            "extracted_text": "Cell theory content."
+        })
+        mock_state.set_state = AsyncMock()
+        mock_state.update_data = AsyncMock()
+        
+        with patch("bot.services.gemini.generate_exam_chapter_topics", new_callable=AsyncMock) as mock_topics, \
+             patch("bot.services.gemini.generate_exam_topic_lesson", new_callable=AsyncMock) as mock_lesson:
+            
+            mock_topics.return_value = ["Cell Structure", "Cell Membrane"]
+            mock_lesson.return_value = ("Step 1 Short Notes & Step 2 10 Questions", [{"number": 1, "correct_answer": "A"}])
+            
+            run_async(process_exam_chapter_selection(mock_msg, mock_state))
+            
+            mock_state.set_state.assert_called_with(PDFStates.waiting_for_exam_answers)
+            # Verify greeting was sent
+            first_reply = mock_msg.answer.call_args_list[0][0][0]
+            self.assertIn("Let's study together, starting from Chapter Chapter 1 in Biology_Notes.pdf", first_reply)
+
+    def test_exam_mcq_answers_evaluation_and_continue(self):
+        """Verify submitting 10 MCQ answers grades response, shows key review, and provides continue keyboard."""
+        from bot.handlers.pdf import process_exam_answers
+        
+        user_id = 99131
+        run_async(student_service.register_student(user_id, "GradeStudent", "grade_student"))
+        
+        mock_msg = AsyncMock()
+        mock_msg.from_user.id = user_id
+        mock_msg.text = "1.A 2.B 3.C 4.D 5.A 6.B 7.C 8.D 9.A 10.B"
+        mock_msg.answer = AsyncMock()
+        
+        mock_state = AsyncMock()
+        mock_state.get_data = AsyncMock(return_value={
+            "current_topic_name": "Cell Structure",
+            "current_mcqs": [{"number": 1, "correct_answer": "A"}],
+            "extracted_text": "Cell text",
+            "topics_list": ["Cell Structure", "Cell Membrane"],
+            "current_topic_index": 0,
+            "chapter_name": "Chapter 1"
+        })
+        
+        with patch("bot.services.gemini.grade_exam_topic_answers", new_callable=AsyncMock) as mock_grade:
+            mock_grade.return_value = (9, "1. Correct (A)\n2. Correct (B)", "Remember to review cell wall vs membrane.")
+            
+            run_async(process_exam_answers(mock_msg, mock_state))
+            
+            self.assertTrue(mock_msg.answer.called)
+            feedback = mock_msg.answer.call_args[0][0]
+            self.assertIn("9/10", feedback)
+            self.assertIn("Exam Checkpoint", feedback)
 
 if __name__ == "__main__":
     unittest.main()

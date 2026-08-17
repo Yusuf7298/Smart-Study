@@ -27,7 +27,7 @@ RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 # Socials & Islamic Reminders Configuration
 SOCIALS_INFO = (
     "🌟 Follow for more Islamic reminders:\n\n"
-    "Telegram: [Yusuf Moha](https://t.me/yusufcodes)\n"
+    "Telegram: [Yusuf Moh](https://t.me/yusufcodes)\n"
     "LinkedIn: [Yusuf Mohammed](https://www.linkedin.com/in/yusuf-mohammed-5272572b6)\n"
     "Instagram: [Yusuf Mohammed](https://instagram.com/kebilad_7488)\n\n"
     "May Allah reward you 🤍"

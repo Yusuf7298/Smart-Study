@@ -88,7 +88,7 @@ async def admin_refresh_callback(callback: CallbackQuery):
     )
     
     await safe_edit(
-        callback.message,
+        callback.message, # type: ignore
         text,
         reply_markup=get_admin_dashboard_keyboard(stats["pending_students"])
     )
@@ -117,14 +117,14 @@ async def admin_view_pending_callback(callback: CallbackQuery):
             ]
         ])
         reg_card = (
-            "⏳ *Pending Student Application*\n"
+            "⏳ Pending Student Application\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 *Name:* {student.first_name or 'N/A'}\n"
-            f"🆔 *Telegram ID:* `{student.telegram_id}`\n"
-            f"🏷️ *Username:* @{student.username if student.username else 'N/A'}\n"
-            f"🎓 *Grade:* {student.grade or 'Not Set'}\n"
-            f"🌐 *Language:* {student.preferred_language}\n"
-            f"📅 *Submitted:* {student.created_at.strftime('%Y-%m-%d %H:%M UTC')}"
+            f"👤 Name: {student.first_name or 'N/A'}\n"
+            f"🆔 Telegram ID:`{student.telegram_id}`\n"
+            f"🏷️ Username:@{student.username if student.username else 'N/A'}\n"
+            f"🎓 Grade: {student.grade or 'Not Set'}\n"
+            f"🌐 Language: {student.preferred_language}\n"
+            f"📅 Submitted: {student.created_at.strftime('%Y-%m-%d %H:%M UTC')}"
         )
         await safe_reply(callback, reg_card, reply_markup=kb)
         
@@ -145,9 +145,9 @@ async def admin_view_approved_callback(callback: CallbackQuery):
         await callback.answer()
         return
         
-    lines = ["👥 *Approved Students (Recent 15):*\n━━━━━━━━━━━━━━━━━━━━"]
+    lines = ["👥 Approved Students (Recent 15):\n━━━━━━━━━━━━━━━━━━━━"]
     for s in approved_list:
-        lines.append(f"• *{s.first_name}* (@{s.username or 'N/A'}) — ID: `{s.telegram_id}` | Grade: {s.grade} | Lang: {s.preferred_language}")
+        lines.append(f"• {s.first_name}* (@{s.username or 'N/A'}) — ID: `{s.telegram_id}` | Grade: {s.grade} | Lang: {s.preferred_language}")
         
     await safe_reply(callback, "\n".join(lines), reply_markup=kb)
     await callback.answer()
@@ -172,9 +172,9 @@ async def admin_view_rejected_callback(callback: CallbackQuery):
             InlineKeyboardButton(text="🔄 Re-Approve", callback_data=f"admin_approve_{s.telegram_id}")
         ]])
         card = (
-            "❌ *Rejected Student Record*\n"
-            f"👤 *Name:* {s.first_name} (@{s.username or 'N/A'})\n"
-            f"🆔 *ID:* `{s.telegram_id}` | Grade: {s.grade}"
+            "❌ Rejected Student Record\n"
+            f"👤 Name: {s.first_name} (@{s.username or 'N/A'})\n"
+            f"🆔 ID: `{s.telegram_id}` | Grade: {s.grade}"
         )
         await safe_reply(callback, card, reply_markup=kb)
     await callback.answer()
@@ -194,17 +194,17 @@ async def admin_logs_handler(event: Message | CallbackQuery):
     logs = await asyncio.to_thread(admin_repo.get_admin_logs, 15)
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Back to Dashboard", callback_data="admin_back")]])
     if not logs:
-        await safe_reply(event, "📜 *Admin Audit Logs*\n\nNo logs recorded yet.", reply_markup=kb)
+        await safe_reply(event, "📜 Admin Audit Logs\n\nNo logs recorded yet.", reply_markup=kb)
         if isinstance(event, CallbackQuery):
             await event.answer()
         return
         
-    lines = ["📜 *Recent Admin Audit Logs (Last 15):*\n━━━━━━━━━━━━━━━━━━━━"]
+    lines = ["📜 Recent Admin Audit Logs (Last 15):\n━━━━━━━━━━━━━━━━━━━━"]
     for log in logs:
         time_str = log.created_at.strftime("%Y-%m-%d %H:%M") if log.created_at else "Recently"
         target_str = f" | Target: `{log.target_id}`" if log.target_id else ""
         details_str = f"\n   _{log.details}_" if log.details else ""
-        lines.append(f"• `[{time_str}]` *{log.action}*{target_str}{details_str}")
+        lines.append(f"• `[{time_str}]` {log.action}{target_str}{details_str}")
         
     await safe_reply(event, "\n\n".join(lines), reply_markup=kb)
     if isinstance(event, CallbackQuery):
@@ -219,7 +219,7 @@ async def admin_prompt_search_callback(callback: CallbackQuery):
         return
         
     text = (
-        "🔍 *Student Search*\n"
+        "🔍 Student Search\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "To search for any student, send:\n\n"
         "`/admin_search <name, username, or ID>`\n\n"
@@ -240,7 +240,7 @@ async def admin_prompt_broadcast_callback(callback: CallbackQuery):
         return
         
     text = (
-        "📢 *Broadcast Announcement*\n"
+        "📢 Broadcast Announcement\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "To broadcast an announcement to all approved students, send:\n\n"
         "`/broadcast <your announcement message here>`\n\n"
@@ -261,7 +261,7 @@ async def admin_search_command(message: Message):
         
     query = message.text.partition(" ")[2].strip() if message.text else ""
     if not query:
-        await safe_reply(message, "ℹ️ *Usage:*\n`/admin_search <name, username, or ID>`")
+        await safe_reply(message, "ℹ️ Usage:\n`/admin_search <name, username, or ID>`")
         return
         
     results = await asyncio.to_thread(admin_repo.search_students, query, 10)
@@ -269,10 +269,10 @@ async def admin_search_command(message: Message):
         await safe_reply(message, f"No students matching '{query}' found.")
         return
         
-    lines = [f"🔍 *Search Results for '{query}':*\n━━━━━━━━━━━━━━━━━━━━"]
+    lines = [f"🔍 Search Results for '{query}':\n━━━━━━━━━━━━━━━━━━━━"]
     for s in results:
         status_emoji = "✅" if s.approval_status == "APPROVED" else ("⏳" if s.approval_status == "PENDING" else "❌")
-        lines.append(f"{status_emoji} *{s.first_name}* (@{s.username or 'N/A'})\n  ID: `{s.telegram_id}` | Grade: {s.grade} | Status: *{s.approval_status}*")
+        lines.append(f"{status_emoji} {s.first_name} (@{s.username or 'N/A'})\n  ID: `{s.telegram_id}` | Grade: {s.grade} | Status: *{s.approval_status}*")
         
     await safe_reply(message, "\n\n".join(lines))
 
@@ -284,7 +284,7 @@ async def approve_student_callback(callback: CallbackQuery):
         await callback.answer("❌ You are not authorized to perform this action.", show_alert=True)
         return
         
-    student_id = int(callback.data.split("admin_approve_")[1])
+    student_id = int(callback.data.split("admin_approve_")[1]) # type: ignore
     student = await student_service.get_student(student_id)
     
     # 1. Update status atomically
@@ -297,12 +297,12 @@ async def approve_student_callback(callback: CallbackQuery):
     lang = student.preferred_language if student else "English"
     try:
         from bot.keyboards.main_menu import get_main_menu_keyboard, get_main_reply_keyboard
-        await callback.bot.send_message(
+        await callback.bot.send_message( # type: ignore
             student_id,
             t("reg_approved_notify", lang),
             reply_markup=get_main_reply_keyboard(lang)
         )
-        await callback.bot.send_message(
+        await callback.bot.send_message( # type: ignore
             student_id,
             t("menu_title", lang, name=student.first_name if student else "Student", grade=student.grade if student else "Not Set", topic="None"),
             reply_markup=get_main_menu_keyboard(lang)
@@ -317,9 +317,9 @@ async def approve_student_callback(callback: CallbackQuery):
     lang_str = student.preferred_language if student else "N/A"
     
     await safe_edit(
-        callback.message,
-        f"✅ *Student Approved Successfully:*\n\n"
-        f"👤 *Name:* {name_str}\n"
+        callback.message, # type: ignore
+        f"✅ Student Approved Successfully:\n\n"
+        f"👤 Name: {name_str}\n"
         f"🆔 *Telegram ID:* `{student_id}`\n"
         f"🏷️ *Username:* {user_str}\n"
         f"🎓 *Grade:* {grade_str}\n"
@@ -336,7 +336,7 @@ async def reject_student_callback(callback: CallbackQuery):
         await callback.answer("❌ You are not authorized to perform this action.", show_alert=True)
         return
         
-    student_id = int(callback.data.split("admin_reject_")[1])
+    student_id = int(callback.data.split("admin_reject_")[1]) # type: ignore
     student = await student_service.get_student(student_id)
     
     # 1. Update status atomically
@@ -348,7 +348,7 @@ async def reject_student_callback(callback: CallbackQuery):
     # 3. Notify student in their preferred language
     lang = student.preferred_language if student else "English"
     try:
-        await callback.bot.send_message(
+        await callback.bot.send_message( # type: ignore
             student_id,
             t("reg_rejected", lang)
         )
@@ -362,7 +362,7 @@ async def reject_student_callback(callback: CallbackQuery):
     lang_str = student.preferred_language if student else "N/A"
     
     await safe_edit(
-        callback.message,
+        callback.message, # type: ignore
         f"❌ *Student Application Rejected:*\n\n"
         f"👤 *Name:* {name_str}\n"
         f"🆔 *Telegram ID:* `{student_id}`\n"
@@ -396,7 +396,7 @@ async def broadcast_command(message: Message):
     sent_count = 0
     fail_count = 0
     formatted_announcement = (
-        "📢 *Smart Study Bot Announcement*\n"
+        "📢 Smart Study Bot Announcement\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"{broadcast_content}\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
@@ -405,7 +405,7 @@ async def broadcast_command(message: Message):
     
     for s_id in approved_ids:
         try:
-            await message.bot.send_message(s_id, formatted_announcement)
+            await message.bot.send_message(s_id, formatted_announcement) # type: ignore
             sent_count += 1
             await asyncio.sleep(0.05) # Rate limit pacing
         except Exception as e:

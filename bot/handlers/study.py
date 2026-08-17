@@ -9,11 +9,12 @@ from aiogram.types import Message, CallbackQuery
 from google.genai import types
 
 from config import SUBJECTS
-from bot.services import student_service, learning_service, conversation_service, quiz_service
+from bot.services import student_service, learning_service, conversation_service, quiz_service, pdf_service
 from bot.services.gemini import ask_gemini_with_profile
 from bot.keyboards.study_input import get_study_input_keyboard, get_study_actions_keyboard
 from bot.services.i18n import t
 from bot.utils import safe_reply, safe_edit
+from bot.handlers.pdf import PDFStates
 
 router = Router()
 
@@ -188,8 +189,45 @@ async def process_study_file_input(message: Message, state: FSMContext):
         part = None
         desc = message.caption or message.text or "Teach me based on this study material."
         
-        # 1. Handle Photo
-        if message.photo:
+        # 1. Handle PDF Document
+        doc_filename = str(getattr(message.document, "file_name", "")) if message.document else ""
+        if message.document and doc_filename.lower().endswith(".pdf"):
+            doc = message.document
+            file = await message.bot.get_file(doc.file_id)
+            file_bytes_io = io.BytesIO()
+            await message.bot.download_file(file.file_path, file_bytes_io)
+            pdf_bytes = file_bytes_io.getvalue()
+            
+            material = await pdf_service.process_and_save_pdf(
+                telegram_id=telegram_id,
+                pdf_bytes=pdf_bytes,
+                original_filename=doc.file_name or "document.pdf",
+                file_id=doc.file_id,
+                student=student
+            )
+            
+            await state.set_state(PDFStates.waiting_for_chapter)
+            await state.update_data(
+                material_id=material.id,
+                filename=material.title or material.filename,
+                extracted_text=material.extracted_text or ""
+            )
+            try:
+                await thinking_msg.delete()
+            except Exception:
+                pass
+                
+            prompt_text = (
+                f"📚 *Final Exam Study Mode: {material.title or material.filename}*\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"Which chapter(s) do you want to study?\n\n"
+                f"💡 _(e.g., Chapter 1, Chapters 2 and 3, or All)_"
+            )
+            await safe_reply(message, prompt_text)
+            return
+
+        # 2. Handle Photo
+        elif message.photo:
             photo = message.photo[-1]
             file = await message.bot.get_file(photo.file_id)
             file_bytes = io.BytesIO()
@@ -199,7 +237,7 @@ async def process_study_file_input(message: Message, state: FSMContext):
                 mime_type="image/jpeg"
             )
             
-        # 2. Handle Document
+        # 3. Handle Other Document
         elif message.document:
             doc = message.document
             file = await message.bot.get_file(doc.file_id)
@@ -207,7 +245,7 @@ async def process_study_file_input(message: Message, state: FSMContext):
             await message.bot.download_file(file.file_path, file_bytes)
             part = types.Part.from_bytes(
                 data=file_bytes.getvalue(),
-                mime_type=doc.mime_type or "application/pdf"
+                mime_type=doc.mime_type or "application/octet-stream"
             )
             
         if not student:

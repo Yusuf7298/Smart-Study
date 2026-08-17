@@ -467,11 +467,12 @@ class TestProductionReadiness(unittest.TestCase):
             self.assertIn("Cs1At07", support_text)
             self.assertIn("0928892344", support_text)
 
-    # 24. Clean Telegram Formatting (Completely strips all # and *)
+    # 24. Clean Telegram Formatting (HTML Bolding & Plain Text Fallback)
     def test_clean_telegram_text_removes_hashtags_and_latex(self):
-        """Verify clean_telegram_text completely removes # and * and renders clean bullets and unicode math."""
-        from bot.utils import clean_telegram_text
+        """Verify clean_telegram_text converts markdown to Telegram HTML bolding with 0 asterisks or hashtags."""
+        from bot.utils import clean_telegram_text, strip_all_formatting
         sample = (
+            "🆔 *Telegram ID:* `123456`\n\n"
             "### The Cell: The Fundamental Unit of Life\n\n"
             "#### 1. The Modern Tenets of Cell Theory\n"
             "* **Energy Flow:** All reactions occur in cells.\n"
@@ -483,10 +484,19 @@ class TestProductionReadiness(unittest.TestCase):
         self.assertNotIn("#", cleaned)
         self.assertNotIn("*", cleaned)
         self.assertNotIn("$", cleaned)
-        self.assertIn("The Cell: The Fundamental Unit of Life", cleaned)
-        self.assertIn("• Energy Flow:", cleaned)
+        self.assertIn("<b>Telegram ID:</b>", cleaned)
+        self.assertIn("<b>The Cell: The Fundamental Unit of Life</b>", cleaned)
+        self.assertIn("• <b>Energy Flow:</b>", cleaned)
         self.assertIn("r³", cleaned)
         self.assertIn("r²", cleaned)
+        
+        # Test fallback
+        plain = strip_all_formatting(cleaned)
+        self.assertNotIn("<", plain)
+        self.assertNotIn(">", plain)
+        self.assertNotIn("*", plain)
+        self.assertIn("Telegram ID:", plain)
+        self.assertIn("Energy Flow:", plain)
 
 if __name__ == "__main__":
     unittest.main()

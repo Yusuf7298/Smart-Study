@@ -76,6 +76,28 @@ class PDFAnalysisResponse(BaseModel):
     topics: List[str] = Field(description="3 to 5 key educational topics or chapters identified in the document.")
     summary: str = Field(description="A clear, high-yield 2-3 paragraph summary of the document in the student's language.")
 
+class ExamTopicListResponse(BaseModel):
+    topics: List[str] = Field(description="List of 2 to 6 specific topic names in logical sequence for the chosen chapter(s) based only on the attached text.")
+
+class ExamMCQItem(BaseModel):
+    number: int = Field(description="Question number (1 to 10).")
+    question: str = Field(description="Question text based ONLY on the attached material.")
+    option_a: str = Field(description="Option A text.")
+    option_b: str = Field(description="Option B text.")
+    option_c: str = Field(description="Option C text.")
+    option_d: str = Field(description="Option D text.")
+    correct_answer: str = Field(description="Correct option letter: A, B, C, or D.")
+    explanation: str = Field(description="Brief explanation grounded in the attached material.")
+
+class ExamTopicLessonResponse(BaseModel):
+    short_notes: str = Field(description="Short, clear, easy-to-remember exam-focused notes explaining the topic using ONLY the attached file. No outside facts.")
+    mcqs: List[ExamMCQItem] = Field(description="Exactly 10 multiple-choice questions with 4 options each based strictly on the topic.")
+
+class ExamGradingResponse(BaseModel):
+    score: int = Field(description="Score out of 10 (0 to 10).")
+    detailed_results: str = Field(description="Itemized check for each question showing correct or incorrect with brief clear explanation.")
+    corrections_and_reteach: str = Field(description="Clear explanation of mistakes and re-teaching of misunderstood concepts based only on the material.")
+
 FALLBACK_MODELS = [
     "gemini-3.5-flash-lite",
     "gemini-3.7-flash",
@@ -545,3 +567,214 @@ async def grade_written_test(
     if last_error:
         raise last_error
     return 7, "B", "Good attempt", "", "", "Keep reviewing", "Test graded."
+
+async def generate_exam_chapter_topics(
+    material_text: str,
+    chapter_name: str,
+    lang: str = "English"
+) -> List[str]:
+    """
+    Extracts the ordered sequence of educational topics for the specified chapter(s)
+    using ONLY the attached document text.
+    """
+    bounded_text = material_text[:25000]
+    prompt = (
+        f"You are organizing a Final Exam Study session in {lang} for '{chapter_name}'.\n"
+        f"Document Content Excerpt:\n\"\"\"\n{bounded_text}\n\"\"\"\n\n"
+        f"STRICT SOURCE RULE:\n"
+        f"- The attached text is the ONLY source. Do NOT use outside knowledge.\n"
+        f"- Extract 2 to 6 specific, ordered topic titles covered in '{chapter_name}'.\n"
+        f"- If the file does not have explicit chapter markers, divide the relevant content into 2 to 5 logical study topics.\n"
+        f"- Output topic names in {lang}."
+    )
+    models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
+    last_error = None
+    
+    for model_name in models_to_try:
+        try:
+            response = await client.aio.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=ExamTopicListResponse,
+                )
+            )
+            parsed = response.parsed
+            if parsed and parsed.topics:
+                return [clean_telegram_text(t) for t in parsed.topics if t.strip()]
+            else:
+                import json
+                data = json.loads(response.text) # type: ignore
+                topics = data.get("topics", [])
+                if topics:
+                    return [clean_telegram_text(t) for t in topics if t.strip()]
+        except Exception as e:
+            if _is_retryable_error(e):
+                last_error = e
+                await asyncio.sleep(0.5)
+                continue
+            else:
+                raise e
+    if last_error:
+        logging.warning(f"Error extracting chapter topics: {last_error}")
+    return [f"{chapter_name} - Core Concepts", f"{chapter_name} - Advanced Applications"]
+
+async def generate_exam_topic_lesson(
+    material_text: str,
+    chapter_name: str,
+    topic_name: str,
+    lang: str = "English"
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Generates Step 1 (Short Notes) and Step 2 (10 MCQs) based ONLY on the attached file.
+    Returns (formatted_lesson_text, mcq_list).
+    """
+    bounded_text = material_text[:25000]
+    prompt = (
+        f"You are conducting a Final Exam Study session in {lang}.\n"
+        f"Chapter: {chapter_name}\n"
+        f"Current Topic: {topic_name}\n\n"
+        f"Document Content Excerpt:\n\"\"\"\n{bounded_text}\n\"\"\"\n\n"
+        f"STRICT RULES:\n"
+        f"1. ONLY use information directly contained in the attached document.\n"
+        f"   Do NOT use outside knowledge, websites, or invent unmentioned concepts.\n"
+        f"   If not in the material, do not include it.\n"
+        f"2. STEP 1 — Short Notes:\n"
+        f"   - Explain the topic using only information from the attached file.\n"
+        f"   - Create short, clear, easy-to-remember notes.\n"
+        f"   - Focus on the important concepts, definitions, facts, and points needed for the final exam.\n"
+        f"   - Do not make the explanation unnecessarily long.\n"
+        f"3. STEP 2 — 10 Multiple-Choice Questions:\n"
+        f"   - Generate EXACTLY 10 MCQs based only on this topic from the file.\n"
+        f"   - 4 options each: A, B, C, D.\n"
+        f"   - Provide the correct answer key and brief explanation internally.\n"
+        f"4. Output all text in {lang}."
+    )
+    models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
+    last_error = None
+    
+    for model_name in models_to_try:
+        try:
+            response = await client.aio.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=ExamTopicLessonResponse,
+                )
+            )
+            parsed = response.parsed
+            if parsed:
+                short_notes = clean_telegram_text(parsed.short_notes)
+                mcq_list = []
+                questions_rendered = []
+                for idx, q in enumerate(parsed.mcqs, 1):
+                    q_data = {
+                        "number": idx,
+                        "question": clean_telegram_text(q.question),
+                        "option_a": clean_telegram_text(q.option_a),
+                        "option_b": clean_telegram_text(q.option_b),
+                        "option_c": clean_telegram_text(q.option_c),
+                        "option_d": clean_telegram_text(q.option_d),
+                        "correct_answer": str(q.correct_answer).strip().upper(),
+                        "explanation": clean_telegram_text(q.explanation)
+                    }
+                    mcq_list.append(q_data)
+                    q_text = (
+                        f"{idx}. {q_data['question']}\n"
+                        f"A) {q_data['option_a']}\n"
+                        f"B) {q_data['option_b']}\n"
+                        f"C) {q_data['option_c']}\n"
+                        f"D) {q_data['option_d']}"
+                    )
+                    questions_rendered.append(q_text)
+                    
+                formatted_lesson = (
+                    f"📖 Step 1 — Short Notes: {topic_name}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"{short_notes}\n\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"❓ Step 2 — 10 Final Exam Questions\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                    + "\n\n".join(questions_rendered)
+                    + "\n\n━━━━━━━━━━━━━━━━━━━━\n"
+                    f"✍️ Submit your 10 answers in a reply message (e.g. 1.A 2.B 3.C... or A B C D A B C D A B):"
+                )
+                return formatted_lesson, mcq_list
+        except Exception as e:
+            if _is_retryable_error(e):
+                last_error = e
+                await asyncio.sleep(0.5)
+                continue
+            else:
+                raise e
+    if last_error:
+        raise last_error
+    raise Exception("Failed to generate exam topic lesson.")
+
+async def grade_exam_topic_answers(
+    material_text: str,
+    topic_name: str,
+    mcqs: List[Dict[str, Any]],
+    student_answers: str,
+    lang: str = "English"
+) -> Tuple[int, str, str]:
+    """
+    Step 3: Checks the student's submitted answers against the 10 MCQs.
+    Returns (score_out_of_10, detailed_results, corrections_and_reteach).
+    """
+    bounded_text = material_text[:25000]
+    import json
+    mcqs_summary = json.dumps(mcqs, ensure_ascii=False)
+    
+    prompt = (
+        f"You are an examiner evaluating a student's 10 MCQ answers in {lang}.\n"
+        f"Topic: {topic_name}\n"
+        f"Questions & Official Answer Key:\n{mcqs_summary}\n\n"
+        f"Student's Submitted Answers:\n{student_answers}\n\n"
+        f"Document Content Context:\n\"\"\"\n{bounded_text}\n\"\"\"\n\n"
+        f"STRICT RULES:\n"
+        f"1. Grade the student's answers (0 to 10).\n"
+        f"2. detailed_results: List each of the 10 questions. Show if the student was Correct (✅) or Incorrect (❌), the correct option, and a brief 1-line reason strictly from the attached material.\n"
+        f"3. corrections_and_reteach: Explain mistakes clearly and briefly re-teach any misunderstood concepts using ONLY the attached file.\n"
+        f"4. If something is missing from the file, state: 'This information is not available in the attached study material.'\n"
+        f"5. Keep the tone encouraging and clear. Output in {lang}."
+    )
+    models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
+    last_error = None
+    
+    for model_name in models_to_try:
+        try:
+            response = await client.aio.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=ExamGradingResponse,
+                )
+            )
+            parsed = response.parsed
+            if parsed:
+                return (
+                    parsed.score,
+                    clean_telegram_text(parsed.detailed_results),
+                    clean_telegram_text(parsed.corrections_and_reteach)
+                )
+            else:
+                data = json.loads(response.text) # type: ignore
+                return (
+                    int(data.get("score", 7)),
+                    clean_telegram_text(str(data.get("detailed_results", ""))),
+                    clean_telegram_text(str(data.get("corrections_and_reteach", "")))
+                )
+        except Exception as e:
+            if _is_retryable_error(e):
+                last_error = e
+                await asyncio.sleep(0.5)
+                continue
+            else:
+                raise e
+    if last_error:
+        raise last_error
+    return 7, "Answers evaluated.", "Keep studying the material."

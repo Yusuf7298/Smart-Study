@@ -33,7 +33,6 @@ logging.basicConfig(
 )
 
 async def global_error_handler(event: ErrorEvent) -> bool:
-    """Global error handler catching unhandled exceptions gracefully without crashing polling."""
     exception = event.exception
     if isinstance(exception, TelegramForbiddenError):
         logging.warning(f"TelegramForbiddenError: Bot was blocked by user or kicked from chat.")
