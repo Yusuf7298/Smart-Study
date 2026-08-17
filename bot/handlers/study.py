@@ -11,7 +11,6 @@ from google.genai import types
 from config import SUBJECTS
 from bot.services import student_service, learning_service, conversation_service, quiz_service
 from bot.services.gemini import ask_gemini_with_profile
-from bot.keyboards.study import get_subjects_keyboard, get_topics_keyboard
 from bot.keyboards.study_input import get_study_input_keyboard, get_study_actions_keyboard
 from bot.services.i18n import t
 from bot.utils import safe_reply, safe_edit
@@ -19,14 +18,15 @@ from bot.utils import safe_reply, safe_edit
 router = Router()
 
 class StudyStates(StatesGroup):
+    waiting_for_course_name = State()
     waiting_for_input_choice = State()
     waiting_for_text = State()
     waiting_for_file = State()
 
 @router.message(Command("study"), StateFilter(None))
 @router.message(F.text.in_(["📚 Study", "📚 አጥና", "📚 Qo'annoo", "📚 Qo'adhu"]), StateFilter(None))
-async def start_study_mode(message: Message):
-    """Triggers Study Mode and displays the subject selection keyboard."""
+async def start_study_mode(message: Message, state: FSMContext):
+    """Triggers Study Mode and asks the student to write the course/subject they want to study."""
     telegram_id = message.from_user.id if message.from_user else None
     if not telegram_id:
         return
@@ -34,93 +34,65 @@ async def start_study_mode(message: Message):
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
 
+    await state.set_state(StudyStates.waiting_for_course_name)
     await safe_reply(
         message,
-        t("study_mode_title", lang),
-        reply_markup=get_subjects_keyboard()
+        t("study_ask_course", lang)
     )
 
 @router.callback_query(F.data == "menu_study", StateFilter(None))
-async def menu_study_callback(callback: CallbackQuery):
+async def menu_study_callback(callback: CallbackQuery, state: FSMContext):
     """Main menu trigger for Study Mode."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
     
+    await state.set_state(StudyStates.waiting_for_course_name)
     await safe_reply(
         callback,
-        t("study_mode_title", lang),
-        reply_markup=get_subjects_keyboard()
+        t("study_ask_course", lang)
     )
-    await callback.answer()
 
-@router.callback_query(F.data.startswith("study_sub_"), StateFilter(None))
-async def select_subject_callback(callback: CallbackQuery):
-    """Processes subject selection and displays topic selection keyboard."""
-    telegram_id = callback.from_user.id
+@router.callback_query(F.data.in_(["study_cancel", "study_back_subjects"]), StateFilter(None))
+async def legacy_study_cancel_callback(callback: CallbackQuery, state: FSMContext):
+    """Safely handles cancellation or back navigation from any legacy study buttons."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    await state.clear()
+    await safe_edit(callback.message, "❌ Study mode cancelled. Use /study or the menu to start anytime.")
+
+@router.message(StudyStates.waiting_for_course_name)
+async def process_course_name_input(message: Message, state: FSMContext):
+    """Receives the student's entered course/subject and presents input options."""
+    telegram_id = message.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
 
-    subject = callback.data.split("_sub_")[1]
-    info = SUBJECTS.get(subject, {})
-    emoji = info.get("emoji", "📚")
-    
-    text = t("study_choose_topic", lang, emoji=emoji, subject=subject)
-    await safe_edit(
-        callback.message,
-        text,
-        reply_markup=get_topics_keyboard(subject)
-    )
-    await callback.answer()
-
-@router.callback_query(F.data == "study_back_subjects", StateFilter(None))
-async def back_to_subjects_callback(callback: CallbackQuery):
-    """Returns to the subject selection keyboard."""
-    telegram_id = callback.from_user.id
-    student = await student_service.get_student(telegram_id)
-    lang = student.preferred_language if student else "English"
-
-    await safe_edit(
-        callback.message,
-        t("study_mode_title", lang),
-        reply_markup=get_subjects_keyboard()
-    )
-    await callback.answer()
-
-@router.callback_query(F.data == "study_cancel", StateFilter(None))
-async def cancel_study_callback(callback: CallbackQuery):
-    """Cancels the study selection menu."""
-    telegram_id = callback.from_user.id
-    student = await student_service.get_student(telegram_id)
-    lang = student.preferred_language if student else "English"
-    
-    await safe_edit(callback.message, t("btn_cancel", lang) + ": Study mode cancelled.")
-    await callback.answer()
-
-@router.callback_query(F.data.startswith("study_topic_"), StateFilter(None))
-async def select_topic_callback(callback: CallbackQuery, state: FSMContext):
-    """Asks the user how they want to provide the study materials/topic."""
-    telegram_id = callback.from_user.id
-    student = await student_service.get_student(telegram_id)
-    lang = student.preferred_language if student else "English"
-
-    subject_topic = callback.data.split("_topic_")[1]
-    subject, topic = subject_topic.split("|", 1)
+    course_name = message.text.strip() if message.text else "General Study"
     
     await state.set_state(StudyStates.waiting_for_input_choice)
-    await state.update_data(subject=subject, topic=topic)
+    await state.update_data(subject=course_name, topic=course_name)
     
-    text = t("study_input_choice", lang, subject=subject, topic=topic)
-    await safe_edit(
-        callback.message,
+    text = t("study_input_choice", lang, subject=course_name, topic=course_name)
+    await safe_reply(
+        message,
         text,
         reply_markup=get_study_input_keyboard()
     )
-    await callback.answer()
 
 @router.callback_query(F.data == "study_input_text", StudyStates.waiting_for_input_choice)
 async def study_input_text_callback(callback: CallbackQuery, state: FSMContext):
     """Asks the student to input their study query/topic description."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
@@ -130,11 +102,14 @@ async def study_input_text_callback(callback: CallbackQuery, state: FSMContext):
         callback.message,
         t("study_ask_text", lang)
     )
-    await callback.answer()
 
 @router.callback_query(F.data == "study_input_file", StudyStates.waiting_for_input_choice)
 async def study_input_file_callback(callback: CallbackQuery, state: FSMContext):
     """Asks the student to send their study file/image."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
@@ -144,7 +119,6 @@ async def study_input_file_callback(callback: CallbackQuery, state: FSMContext):
         callback.message,
         t("study_ask_file", lang)
     )
-    await callback.answer()
 
 @router.message(StudyStates.waiting_for_text)
 async def process_study_text_input(message: Message, state: FSMContext):
@@ -154,8 +128,8 @@ async def process_study_text_input(message: Message, state: FSMContext):
     lang = student.preferred_language if student else "English"
 
     data = await state.get_data()
-    subject = data.get("subject")
-    topic = data.get("topic")
+    subject = data.get("subject", "General Study")
+    topic = data.get("topic", subject)
     await state.clear()
     
     thinking_msg = await message.answer(t("study_intro_thinking", lang))
@@ -204,8 +178,8 @@ async def process_study_file_input(message: Message, state: FSMContext):
     lang = student.preferred_language if student else "English"
 
     data = await state.get_data()
-    subject = data.get("subject")
-    topic = data.get("topic")
+    subject = data.get("subject", "General Study")
+    topic = data.get("topic", subject)
     await state.clear()
     
     thinking_msg = await message.answer(t("study_intro_thinking", lang))

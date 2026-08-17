@@ -1,7 +1,13 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
-from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError, TelegramBadRequest, TelegramRetryAfter
+from aiogram.exceptions import (
+    TelegramAPIError,
+    TelegramForbiddenError,
+    TelegramBadRequest,
+    TelegramRetryAfter,
+    TelegramNetworkError,
+)
 from aiogram.types import ErrorEvent
 
 from config import BOT_TOKEN, validate_environment
@@ -38,6 +44,9 @@ async def global_error_handler(event: ErrorEvent) -> bool:
         return True
     elif isinstance(exception, TelegramBadRequest):
         logging.warning(f"TelegramBadRequest: {exception}")
+        return True
+    elif isinstance(exception, TelegramNetworkError):
+        logging.warning(f"TelegramNetworkError: Network glitch ({exception}). Reconnecting...")
         return True
     elif isinstance(exception, TelegramAPIError):
         logging.error(f"TelegramAPIError: {exception}", exc_info=True)
@@ -84,8 +93,21 @@ async def main():
     dp.include_router(actions_router)
     dp.include_router(chat_router)
 
-    logging.info("Starting Smart Study Bot polling...")
-    await dp.start_polling(bot)
+    # 7. Resilient Polling Loop (auto-reconnects on network drops)
+    while True:
+        try:
+            logging.info("Starting Smart Study Bot polling...")
+            await dp.start_polling(bot, handle_signals=True, polling_timeout=30)
+            break
+        except (KeyboardInterrupt, SystemExit):
+            logging.info("Smart Study Bot stopped gracefully.")
+            break
+        except Exception as e:
+            logging.warning(f"Network / connection blip encountered ({e}). Reconnecting in 3s...")
+            await asyncio.sleep(3)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("Smart Study Bot process terminated.")

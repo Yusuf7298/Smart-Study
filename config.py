@@ -33,6 +33,16 @@ SOCIALS_INFO = (
     "May Allah reward you 🤍"
 )
 
+# Support & Contact Configuration
+SUPPORT_INFO = (
+    "📞 *Support & Contact Information*\n"
+    "━━━━━━━━━━━━━━━━━━━━\n\n"
+    "For inquiries, help, or technical support:\n\n"
+    "• 💬 Telegram: [Cs1At07](https://t.me/Cs1At07)\n"
+    "• 📱 Phone: `0928892344`\n\n"
+    "We are here to assist you anytime! 🎓"
+)
+
 # Centralized Subjects & Topics Configuration
 SUBJECTS = {
     "Computer Science": {

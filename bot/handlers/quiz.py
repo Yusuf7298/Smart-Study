@@ -68,29 +68,36 @@ async def send_next_quiz_question(message: Message, quiz_session) -> None:
 @router.callback_query(F.data == "menu_quiz", StateFilter(None))
 async def action_quiz_callback(callback: CallbackQuery):
     """Callback redirect to start or continue a quiz."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
     
-    # Check for active quiz
-    active_quiz = await quiz_service.get_active_quiz(telegram_id)
-    if active_quiz:
-        await safe_reply(
-            callback,
-            t("quiz_active_prompt", lang, current=active_quiz.current_question, total=active_quiz.total_questions),
-            reply_markup=get_quiz_active_keyboard()
-        )
-        await callback.answer()
-        return
-        
-    # Check for active learning session
+    # 1. Check for active learning session
     learning_session = await learning_service.get_active_session(telegram_id)
     if not learning_session:
         await safe_reply(
             callback,
             t("no_active_session", lang)
         )
-        await callback.answer()
+        return
+
+    # 2. Check for active quiz and ensure it matches current learning session
+    active_quiz = await quiz_service.get_active_quiz(telegram_id)
+    if active_quiz and (active_quiz.learning_session_id != learning_session.id or active_quiz.subject != learning_session.subject or active_quiz.topic != learning_session.topic):
+        await asyncio.to_thread(quiz_repo.set_quiz_status, active_quiz.id, 'CANCELLED')
+        active_quiz = None
+
+    if active_quiz:
+        await safe_reply(
+            callback,
+            t("quiz_active_prompt", lang, current=active_quiz.current_question, total=active_quiz.total_questions),
+            reply_markup=get_quiz_active_keyboard()
+        )
         return
         
     # Start new quiz session
@@ -103,7 +110,6 @@ async def action_quiz_callback(callback: CallbackQuery):
         telegram_id, learning_session.id, learning_session.subject, learning_session.topic
     )
     await send_next_quiz_question(callback.message, quiz_session)
-    await callback.answer()
 
 @router.message(Command("quiz"), StateFilter(None))
 @router.message(F.text.in_(["❓ Quiz", "❓ ጥያቄና መልስ (Quiz)", "❓ Gaaffilee (Quiz)"]), StateFilter(None))
@@ -116,22 +122,26 @@ async def quiz_start(message: Message):
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
     
-    # 1. Check for active quiz
-    active_quiz = await quiz_service.get_active_quiz(telegram_id)
-    if active_quiz:
-        await safe_reply(
-            message,
-            t("quiz_active_prompt", lang, current=active_quiz.current_question, total=active_quiz.total_questions),
-            reply_markup=get_quiz_active_keyboard()
-        )
-        return
-        
-    # 2. Check for active learning session
+    # 1. Check for active learning session
     learning_session = await learning_service.get_active_session(telegram_id)
     if not learning_session:
         await safe_reply(
             message,
             t("no_active_session", lang)
+        )
+        return
+
+    # 2. Check for active quiz and ensure it matches current learning session
+    active_quiz = await quiz_service.get_active_quiz(telegram_id)
+    if active_quiz and (active_quiz.learning_session_id != learning_session.id or active_quiz.subject != learning_session.subject or active_quiz.topic != learning_session.topic):
+        await asyncio.to_thread(quiz_repo.set_quiz_status, active_quiz.id, 'CANCELLED')
+        active_quiz = None
+
+    if active_quiz:
+        await safe_reply(
+            message,
+            t("quiz_active_prompt", lang, current=active_quiz.current_question, total=active_quiz.total_questions),
+            reply_markup=get_quiz_active_keyboard()
         )
         return
         
@@ -151,13 +161,18 @@ async def quiz_start(message: Message):
 @router.callback_query(F.data == "quiz_active_continue", StateFilter(None))
 async def quiz_continue_callback(callback: CallbackQuery):
     """Callback handler to continue an active quiz session."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
     
     active_quiz = await quiz_service.get_active_quiz(telegram_id)
     if not active_quiz:
-        await callback.answer("❌ No active quiz found.", show_alert=True)
+        await safe_reply(callback, "❌ No active quiz found.")
         return
         
     try:
@@ -197,12 +212,15 @@ async def quiz_continue_callback(callback: CallbackQuery):
     else:
         # Generate next question
         await send_next_quiz_question(callback.message, active_quiz)
-        
-    await callback.answer()
 
 @router.callback_query(F.data == "quiz_active_cancel", StateFilter(None))
 async def quiz_cancel_callback(callback: CallbackQuery):
     """Callback handler to cancel an active quiz session."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
@@ -216,7 +234,6 @@ async def quiz_cancel_callback(callback: CallbackQuery):
         "Your study session is still saved.\n\n"
         "💡 Use /quiz to start a new one, or continue studying."
     )
-    await callback.answer()
 
 @router.callback_query(F.data.startswith("quiz_ans_"), StateFilter(None))
 async def quiz_answer_callback(callback: CallbackQuery):
@@ -265,8 +282,11 @@ async def quiz_answer_callback(callback: CallbackQuery):
         await callback.answer(str(e), show_alert=True)
         return
         
-    await callback.answer()
-    
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+        
     # 6. Update question message with results and remove keyboard
     options = json.loads(question.options_json)
     chosen_text = options.get(choice, "")

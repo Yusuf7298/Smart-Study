@@ -96,6 +96,10 @@ async def socials_command(message: Message):
 @router.callback_query(F.data == "menu_socials")
 async def socials_callback(callback: CallbackQuery):
     """Callback for Follow Us / Socials from main menu."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
@@ -104,10 +108,39 @@ async def socials_callback(callback: CallbackQuery):
         callback,
         t("socials_title", lang)
     )
-    await callback.answer()
+
+@router.message(Command("support"))
+@router.message(Command("contact"))
+@router.message(F.text.in_(["📞 Support", "📞 ድጋፍ", "📞 Deeggarsa"]))
+async def support_command(message: Message):
+    """Displays contact and support info."""
+    telegram_id = message.from_user.id if message.from_user else None
+    student = await student_service.get_student(telegram_id) if telegram_id else None
+    lang = student.preferred_language if student else "English"
+    
+    await safe_reply(
+        message,
+        t("support_title", lang)
+    )
+
+@router.callback_query(F.data == "menu_support")
+async def support_callback(callback: CallbackQuery):
+    """Callback for Support from main menu."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    telegram_id = callback.from_user.id
+    student = await student_service.get_student(telegram_id)
+    lang = student.preferred_language if student else "English"
+    
+    await safe_reply(
+        callback,
+        t("support_title", lang)
+    )
 
 @router.message(Command("help"))
-@router.message(F.text.in_(["❓ Help", "❓ እገዛ", "❓ Gargaarsa"]))
+@router.message(F.text.in_(["ℹ️ Help", "ℹ️ እርዳታ", "ℹ️ Gargaarsa", "❓ Help", "❓ እገዛ"]))
 async def help_command(message: Message):
     """Displays the comprehensive user guide in the student's language."""
     telegram_id = message.from_user.id if message.from_user else None
@@ -121,15 +154,21 @@ async def help_command(message: Message):
 @router.callback_query(F.data == "menu_help")
 async def help_callback(callback: CallbackQuery):
     """Main menu callback for Help."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
     await safe_reply(callback, t("help_title", lang))
-    await callback.answer()
 
 @router.callback_query(F.data.in_(["menu_back", "menu_main", "main_menu"]))
 async def back_to_main_menu_callback(callback: CallbackQuery):
     """Returns the student to the main dashboard menu."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     telegram_id = callback.from_user.id
     await send_student_dashboard(callback.message, telegram_id) # type: ignore
-    await callback.answer()

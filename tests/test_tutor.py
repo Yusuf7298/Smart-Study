@@ -308,9 +308,9 @@ class TestStudentTutor(unittest.TestCase):
         self.assertIn("Language: Afaan Oromo", instruction)
 
     def test_study_mode_selection_and_session_creation(self):
-        """Verify that study command displays keyboards and selecting a topic registers a session."""
+        """Verify that study command prompts for course name, accepts text input, and registers a session."""
         from bot.handlers.study import (
-            start_study_mode, select_subject_callback, select_topic_callback,
+            start_study_mode, process_course_name_input, study_input_text_callback,
             process_study_text_input, StudyStates
         )
         user_id = 99111
@@ -320,57 +320,63 @@ class TestStudentTutor(unittest.TestCase):
         mock_msg = AsyncMock()
         mock_msg.from_user.id = user_id
         mock_msg.answer = AsyncMock()
-        run_async(start_study_mode(mock_msg))
-        mock_msg.answer.assert_called_once()
-        self.assertIn("Study Mode", mock_msg.answer.call_args[0][0])
-        
-        # Case 2: Select subject callback
-        mock_cb_sub = AsyncMock()
-        mock_cb_sub.from_user.id = user_id
-        mock_cb_sub.data = "study_sub_School Subjects"
-        mock_cb_sub.message.edit_text = AsyncMock()
-        mock_cb_sub.answer = AsyncMock()
-        run_async(select_subject_callback(mock_cb_sub))
-        
-        edit_text = mock_cb_sub.message.edit_text.call_args[0][0]
-        self.assertIn("School Subjects", edit_text)
-        self.assertIn("Choose a topic", edit_text)
-        
-        # Case 3: Select topic callback
-        mock_cb_topic = AsyncMock()
-        mock_cb_topic.from_user.id = user_id
-        mock_cb_topic.data = "study_topic_School Subjects|🧬 Biology"
-        mock_cb_topic.message.edit_text = AsyncMock()
-        mock_cb_topic.answer = AsyncMock()
-        
         mock_state = AsyncMock()
         mock_state.set_state = AsyncMock()
         mock_state.update_data = AsyncMock()
         
-        run_async(select_topic_callback(mock_cb_topic, mock_state))
+        run_async(start_study_mode(mock_msg, mock_state))
+        mock_msg.answer.assert_called_once()
+        mock_state.set_state.assert_called_with(StudyStates.waiting_for_course_name)
+        self.assertIn("Start Studying", mock_msg.answer.call_args[0][0])
+        
+        # Case 2: Process course name input
+        mock_msg_course = AsyncMock()
+        mock_msg_course.from_user.id = user_id
+        mock_msg_course.text = "Data Structures & Algorithms"
+        mock_msg_course.answer = AsyncMock()
+        
+        run_async(process_course_name_input(mock_msg_course, mock_state))
         mock_state.set_state.assert_called_with(StudyStates.waiting_for_input_choice)
-        mock_state.update_data.assert_called_with(subject="School Subjects", topic="🧬 Biology")
+        mock_state.update_data.assert_called_with(
+            subject="Data Structures & Algorithms",
+            topic="Data Structures & Algorithms"
+        )
+        course_reply = mock_msg_course.answer.call_args[0][0]
+        self.assertIn("Data Structures & Algorithms", course_reply)
+        
+        # Case 3: Select text input choice
+        mock_cb_text = AsyncMock()
+        mock_cb_text.from_user.id = user_id
+        mock_cb_text.data = "study_input_text"
+        mock_cb_text.message.edit_text = AsyncMock()
+        mock_cb_text.answer = AsyncMock()
+        
+        run_async(study_input_text_callback(mock_cb_text, mock_state))
+        mock_state.set_state.assert_called_with(StudyStates.waiting_for_text)
         
         # Case 4: Process text description to launch session
         mock_msg_text = AsyncMock()
         mock_msg_text.from_user.id = user_id
         mock_msg_text.from_user.first_name = "StudyStudent"
         mock_msg_text.from_user.username = "studystudent"
-        mock_msg_text.text = "Explain photosynthesis and plant cell anatomy"
+        mock_msg_text.text = "Explain Binary Search Trees and Big-O notation"
         mock_msg_text.answer = AsyncMock()
         
-        mock_state.get_data = AsyncMock(return_value={"subject": "School Subjects", "topic": "🧬 Biology"})
+        mock_state.get_data = AsyncMock(return_value={
+            "subject": "Data Structures & Algorithms",
+            "topic": "Data Structures & Algorithms"
+        })
         mock_state.clear = AsyncMock()
         
         with patch("bot.handlers.study.ask_gemini_with_profile", new_callable=AsyncMock) as mock_ask:
-            mock_ask.return_value = ("Introduction to photosynthesis...", None, None)
+            mock_ask.return_value = ("Introduction to Binary Search Trees...", None, None)
             run_async(process_study_text_input(mock_msg_text, mock_state))
             
             # Verify session registered in database
             session = run_async(learning_service.get_active_session(user_id))
             self.assertIsNotNone(session)
-            self.assertEqual(session.subject, "School Subjects")
-            self.assertEqual(session.topic, "🧬 Biology")
+            self.assertEqual(session.subject, "Data Structures & Algorithms")
+            self.assertEqual(session.topic, "Data Structures & Algorithms")
             self.assertEqual(session.stage, "INTRODUCTION")
 
     def test_current_command(self):
@@ -666,7 +672,7 @@ class TestStudentTutor(unittest.TestCase):
             
             thinking = mock_msg.answer.return_value
             reply = thinking.edit_text.call_args[0][0]
-            self.assertIn("Written Test Mode", reply)
+            self.assertIn("Written Test", reply)
             self.assertIn("Test Question 1, 2, 3", reply)
             
         # Simulate answering
@@ -707,7 +713,7 @@ class TestStudentTutor(unittest.TestCase):
             
             thinking = mock_msg.answer.return_value
             reply = thinking.edit_text.call_args[0][0]
-            self.assertIn("Short Notes Summary", reply)
+            self.assertIn("Short Notes", reply)
             self.assertIn("Concise note content", reply)
 
     def test_action_personalize_command(self):

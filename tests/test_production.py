@@ -101,6 +101,7 @@ class TestProductionReadiness(unittest.TestCase):
         self.assertIn("menu_profile", all_inline_callbacks)
         self.assertIn("menu_language", all_inline_callbacks)
         self.assertIn("menu_help", all_inline_callbacks)
+        self.assertIn("menu_support", all_inline_callbacks)
         
         all_reply_texts = [btn.text for row in reply_kb.keyboard for btn in row]
         self.assertTrue(any("Study" in txt for txt in all_reply_texts))
@@ -112,6 +113,7 @@ class TestProductionReadiness(unittest.TestCase):
         self.assertTrue(any("Progress" in txt for txt in all_reply_texts))
         self.assertTrue(any("Profile" in txt for txt in all_reply_texts))
         self.assertTrue(any("Help" in txt for txt in all_reply_texts))
+        self.assertTrue(any("Support" in txt for txt in all_reply_texts))
 
     # 3. PDF Pipeline: Text Extraction & Safety
     def test_pdf_extraction_and_safety(self):
@@ -456,6 +458,35 @@ class TestProductionReadiness(unittest.TestCase):
         self.assertTrue(len(logs) > 0)
         self.assertEqual(logs[0].action, "TEST_ACTION")
         self.assertEqual(logs[0].target_id, 123456)
+
+    # 23. Support & Contact Information Across All Languages
+    def test_support_command_and_multilingual_content(self):
+        """Verify support text contains Telegram link @Cs1At07 and phone number across languages."""
+        for lang in ["English", "Amharic", "Afaan Oromo"]:
+            support_text = t("support_title", lang)
+            self.assertIn("Cs1At07", support_text)
+            self.assertIn("0928892344", support_text)
+
+    # 24. Clean Telegram Formatting (Completely strips all # and *)
+    def test_clean_telegram_text_removes_hashtags_and_latex(self):
+        """Verify clean_telegram_text completely removes # and * and renders clean bullets and unicode math."""
+        from bot.utils import clean_telegram_text
+        sample = (
+            "### The Cell: The Fundamental Unit of Life\n\n"
+            "#### 1. The Modern Tenets of Cell Theory\n"
+            "* **Energy Flow:** All reactions occur in cells.\n"
+            "* Surface Area-to-Volume Ratio ($SA/V$) with volume ($r^3$) and area ($r^2$).\n"
+            "---\n"
+            "***Let's Think About This:***"
+        )
+        cleaned = clean_telegram_text(sample)
+        self.assertNotIn("#", cleaned)
+        self.assertNotIn("*", cleaned)
+        self.assertNotIn("$", cleaned)
+        self.assertIn("The Cell: The Fundamental Unit of Life", cleaned)
+        self.assertIn("• Energy Flow:", cleaned)
+        self.assertIn("r³", cleaned)
+        self.assertIn("r²", cleaned)
 
 if __name__ == "__main__":
     unittest.main()

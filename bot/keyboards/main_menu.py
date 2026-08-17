@@ -27,7 +27,8 @@ def get_main_menu_keyboard(lang: str = "English") -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=t("btn_language", lang), callback_data="menu_language")
         ],
         [
-            InlineKeyboardButton(text=t("btn_help", lang), callback_data="menu_help")
+            InlineKeyboardButton(text=t("btn_help", lang), callback_data="menu_help"),
+            InlineKeyboardButton(text=t("btn_support", lang), callback_data="menu_support")
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -53,7 +54,8 @@ def get_main_reply_keyboard(lang: str = "English") -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text=t("btn_socials", lang)),
-            KeyboardButton(text=t("btn_help", lang))
+            KeyboardButton(text=t("btn_help", lang)),
+            KeyboardButton(text=t("btn_support", lang))
         ]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)

@@ -7,6 +7,7 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from config import GEMINI_API_KEY, GEMINI_MODEL
 from bot.database.models import StudentModel, LearningSessionModel
+from bot.utils import clean_telegram_text
 
 client = genai.Client(
     api_key=GEMINI_API_KEY,
@@ -14,19 +15,21 @@ client = genai.Client(
 )
 
 BASE_SYSTEM_INSTRUCTION = """
-You are an adaptive, patient, and world-class AI Study Tutor for students.
+You are an expert, patient, and natural human Study Tutor for students.
 
-Your core responsibilities:
-1. Behave like a patient teacher: Speak in an encouraging, respectful, and supportive tone. If a student is confused, explain again using different words or visual analogies.
-2. Always use the student's stored profile (Grade, Education Level, Language) and teach at their exact education level.
-3. Language consistency: Always respond in the student's preferred language ({language}) unless they explicitly request otherwise.
-4. Always consider the current learning context (Subject, Topic, Subtopic, Learning Stage) if provided. When the student has an active topic, continue teaching that topic.
-5. Adapt explanations: Use simple, plain language and concrete everyday analogies for younger students. Increase technical precision, rigor, and depth for high school and university students.
-6. Do not repeatedly ask questions whose answers are already known (such as their grade, language, or current topic).
-7. Guide the student through learning stages: Introduction -> Core Concept -> Terminology -> Real-world Application -> Check Understanding -> Practice -> Feedback.
-8. Socratic Method: Do not simply hand over final answers to homework questions. Guide the student step-by-step so they learn the underlying reasoning.
-9. If a student makes a mistake, explain the misconception kindly and demonstrate the correct method.
-10. Keep answers structured and clean with bullet points and bold headers.
+Your core guidelines:
+1. Speak naturally like an experienced, warm human teacher. Never sound like an AI assistant.
+2. NO ROBOTIC FILLER: Never start responses with boilerplate phrases like "Welcome to this lesson!", "Certainly!", "As an AI tutor...", "Here is what you need to know...", "Great question!", or "Take a deep breath!".
+3. NO CLICHÉ SIGN-OFFS: Avoid repetitive closing fluff like "I hope this helps! Feel free to ask more!" or "I look forward to your response!". End naturally with a thought-provoking question or practice exercise when teaching.
+4. Always teach at the student's exact stored profile level. Use simple everyday analogies for younger students; use precise technical rigor for high school and university students.
+5. Language consistency: Always communicate naturally in the student's preferred language ({language}).
+6. Maintain context: Build on the current learning context.
+7. Socratic Method: Guide students step-by-step to discover solutions on their own instead of handing out answers.
+8. TELEGRAM FORMATTING RULES:
+   - NEVER use hashtag markdown headers (#, ##, ###, ####). Telegram does not render them and prints raw hashtags. Instead, use clean bold text (*Topic Name*).
+   - NEVER use triple asterisks (***).
+   - NEVER use LaTeX dollar signs ($...$ or $$...$$). Write formulas using clean unicode characters (e.g. x², r³, °, ±, ÷, ×, →, √, π).
+   - Use clean unicode bullet points (•) for lists instead of asterisks (*).
 """
 
 STUDENT_PROFILE_RULES = """
@@ -74,11 +77,21 @@ class PDFAnalysisResponse(BaseModel):
     summary: str = Field(description="A clear, high-yield 2-3 paragraph summary of the document in the student's language.")
 
 FALLBACK_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash"
+    "gemini-3.5-flash-lite",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.1-flash-lite"
 ]
+
+RETRYABLE_ERROR_TERMS = [
+    "503", "429", "404", "unavailable", "overloaded", "quota", 
+    "exhausted", "not_found", "not found", "is no longer available", 
+    "resource has been exhausted", "rate limit", "busy"
+]
+
+def _is_retryable_error(e: Exception) -> bool:
+    err_str = str(e).lower()
+    return any(term in err_str for term in RETRYABLE_ERROR_TERMS)
 
 def get_system_instruction(student: StudentModel, session: Optional[LearningSessionModel] = None) -> str:
     """Generates dynamic system instructions injecting the student's current profile and learning session details."""
@@ -145,7 +158,7 @@ async def ask_gemini_with_profile(
                 model=model_name,
                 history=clean_history, # type: ignore
                 config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
+                    system_instruction=system_instruction, # type: ignore
                     response_mime_type="application/json",
                     response_schema=TutorResponse,
                 )
@@ -154,19 +167,20 @@ async def ask_gemini_with_profile(
             
             parsed = response.parsed
             if parsed:
-                return parsed.tutor_response, parsed.extracted_grade, parsed.extracted_language # type: ignore
+                raw_ans = getattr(parsed, "tutor_response", "") or ""
+                return clean_telegram_text(raw_ans), parsed.extracted_grade, parsed.extracted_language # type: ignore
             else:
                 import json
                 data = json.loads(response.text) # type: ignore
+                raw_ans = data.get("tutor_response", "") or ""
                 return (
-                    data.get("tutor_response", ""),
+                    clean_telegram_text(raw_ans),
                     data.get("extracted_grade"),
                     data.get("extracted_language")
                 )
         except Exception as e:
-            err_str = str(e).lower()
-            if any(term in err_str for term in ["503", "429", "unavailable", "overloaded", "quota", "exhausted", "not found"]):
-                logging.warning(f"Model {model_name} failed (unavailability or quota exceeded: {e}). Trying next fallback model...")
+            if _is_retryable_error(e):
+                logging.warning(f"Model {model_name} failed ({e}). Trying next fallback model...")
                 last_error = e
                 await asyncio.sleep(0.5)
                 continue
@@ -232,8 +246,8 @@ async def generate_quiz_question(
             )
             parsed = response.parsed
             if parsed:
-                if hasattr(parsed, "options") and isinstance(parsed.options, dict):
-                    options = {str(k): str(v) for k, v in parsed.options.items()}
+                if hasattr(parsed, "options") and isinstance(parsed.options, dict): # type: ignore
+                    options = {str(k): str(v) for k, v in parsed.options.items()} # type: ignore
                 else:
                     options = {
                         "A": str(getattr(parsed, "option_a", "Option A")),
@@ -264,9 +278,8 @@ async def generate_quiz_question(
                     data.get("explanation", "")
                 )
         except Exception as e:
-            err_str = str(e).lower()
-            if any(term in err_str for term in ["503", "429", "unavailable", "overloaded", "quota", "exhausted", "not found"]):
-                logging.warning(f"Model {model_name} failed for quiz gen: {e}. Trying next fallback model...")
+            if _is_retryable_error(e):
+                logging.warning(f"Model {model_name} failed for quiz gen ({e}). Trying next fallback model...")
                 last_error = e
                 await asyncio.sleep(0.5)
                 continue
@@ -322,8 +335,7 @@ async def extract_pdf_topics_and_summary(
                     data.get("summary", "Document analyzed.")
                 )
         except Exception as e:
-            err_str = str(e).lower()
-            if any(term in err_str for term in ["503", "429", "unavailable", "overloaded", "quota", "exhausted", "not found"]):
+            if _is_retryable_error(e):
                 last_error = e
                 await asyncio.sleep(0.5)
                 continue
@@ -367,8 +379,7 @@ async def ask_gemini_with_pdf_context(
             )
             return response.text or "I could not find a specific answer in the document."
         except Exception as e:
-            err_str = str(e).lower()
-            if any(term in err_str for term in ["503", "429", "unavailable", "overloaded", "quota", "exhausted", "not found"]):
+            if _is_retryable_error(e):
                 last_error = e
                 await asyncio.sleep(0.5)
                 continue
@@ -409,14 +420,14 @@ async def generate_pdf_quiz_question(
                 model=model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
+                    response_mime_type="application/json", # type: ignore
                     response_schema=QuizQuestionResponse,
                 )
             )
             parsed = response.parsed
             if parsed:
-                if hasattr(parsed, "options") and isinstance(parsed.options, dict):
-                    options = {str(k): str(v) for k, v in parsed.options.items()}
+                if hasattr(parsed, "options") and isinstance(parsed.options, dict): # type: ignore
+                    options = {str(k): str(v) for k, v in parsed.options.items()} # type: ignore
                 else:
                     options = {
                         "A": str(getattr(parsed, "option_a", "Option A")),
@@ -447,8 +458,7 @@ async def generate_pdf_quiz_question(
                     data.get("explanation", "")
                 )
         except Exception as e:
-            err_str = str(e).lower()
-            if any(term in err_str for term in ["503", "429", "unavailable", "overloaded", "quota", "exhausted", "not found"]):
+            if _is_retryable_error(e):
                 last_error = e
                 await asyncio.sleep(0.5)
                 continue
@@ -504,29 +514,28 @@ async def grade_written_test(
             parsed = response.parsed
             if parsed:
                 return (
-                    parsed.score,
-                    parsed.letter_grade,
-                    parsed.strengths,
-                    parsed.weaknesses,
-                    parsed.corrections,
-                    parsed.recommendations,
-                    parsed.formatted_feedback
+                    parsed.score, # type: ignore
+                    parsed.letter_grade, # type: ignore
+                    clean_telegram_text(str(parsed.strengths)), # type: ignore
+                    clean_telegram_text(str(parsed.weaknesses)), # type: ignore
+                    clean_telegram_text(str(parsed.corrections)), # type: ignore
+                    clean_telegram_text(str(parsed.recommendations)), # type: ignore
+                    clean_telegram_text(str(parsed.formatted_feedback)) # type: ignore
                 )
             else:
                 import json
-                data = json.loads(response.text)
+                data = json.loads(response.text) # type: ignore
                 return (
                     int(data.get("score", 8)),
                     str(data.get("letter_grade", "B")),
-                    str(data.get("strengths", "Good effort")),
-                    str(data.get("weaknesses", "None")),
-                    str(data.get("corrections", "Review topic")),
-                    str(data.get("recommendations", "Keep practicing")),
-                    str(data.get("formatted_feedback", "Test completed."))
+                    clean_telegram_text(str(data.get("strengths", "Good effort"))),
+                    clean_telegram_text(str(data.get("weaknesses", "None"))),
+                    clean_telegram_text(str(data.get("corrections", "Review topic"))),
+                    clean_telegram_text(str(data.get("recommendations", "Keep practicing"))),
+                    clean_telegram_text(str(data.get("formatted_feedback", "Test completed.")))
                 )
         except Exception as e:
-            err_str = str(e).lower()
-            if any(term in err_str for term in ["503", "429", "unavailable", "overloaded", "quota", "exhausted", "not found"]):
+            if _is_retryable_error(e):
                 last_error = e
                 await asyncio.sleep(0.5)
                 continue

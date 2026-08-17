@@ -33,7 +33,8 @@ TRANSLATIONS = {
         "btn_materials": "📎 My Materials",
         "btn_socials": "🌟 Follow Us",
         "btn_language": "🌐 Language",
-        "btn_help": "❓ Help",
+        "btn_help": "ℹ️ Help",
+        "btn_support": "📞 Support",
         "btn_cancel": "❌ Cancel",
         "btn_back": "🔙 Back",
         "btn_continue": "▶️ Continue",
@@ -41,6 +42,7 @@ TRANSLATIONS = {
         "btn_study_mat": "📖 Study Material",
         "btn_upload_pdf": "📤 Upload PDF",
         "socials_title": "🌟 *Follow for More Islamic Reminders & Updates*\n━━━━━━━━━━━━━━━━━━━━\n\nTelegram: [Yusuf Moha](https://t.me/yusufcodes)\nLinkedIn: [Yusuf Mohammed](https://www.linkedin.com/in/yusuf-mohammed-5272572b6)\nInstagram: [Yusuf Mohammed](https://instagram.com/kebilad_7488)\n\n━━━━━━━━━━━━━━━━━━━━\nMay Allah reward you 🤍",
+        "support_title": "📞 *Support & Contact Information*\n━━━━━━━━━━━━━━━━━━━━\n\nFor inquiries, help, or technical support:\n\n• 💬 Telegram: [@Cs1At07](https://t.me/Cs1At07)\n• 📱 Phone: `0928892344`\n\nWe are here to assist you anytime! 🎓",
 
         # Registration
         "reg_welcome": "📝 *Student Registration*\n━━━━━━━━━━━━━━━━━━━━\nWelcome to Smart Study Bot!\nLet's set up your profile.\n\nPlease enter your full name:",
@@ -55,9 +57,10 @@ TRANSLATIONS = {
         "reg_approved_notify": "🎉 *Congratulations! Your account has been approved!*\n━━━━━━━━━━━━━━━━━━━━\nYou now have full access to Smart Study Bot.\nUse the menu below or /study to begin learning!",
 
         # Study Mode
-        "study_mode_title": "📚 *Study Mode*\n━━━━━━━━━━━━━━━━━━━━\nChoose a subject to start learning:",
+        "study_mode_title": "📚 *Study Mode*\n━━━━━━━━━━━━━━━━━━━━\nPlease enter the subject or course you want to study:",
+        "study_ask_course": "📚 *Start Studying*\n━━━━━━━━━━━━━━━━━━━━\nPlease enter the subject or course you want to study (e.g., *Computer Science*, *Calculus*, *Biology*, *World History*):",
         "study_choose_topic": "{emoji} *{subject}*\n━━━━━━━━━━━━━━━━━━━━\nChoose a topic to study:",
-        "study_input_choice": "📚 *Study Material Input*\n━━━━━━━━━━━━━━━━━━━━\nYou selected: *{subject} → {topic}*\n\nHow would you like to provide your study context or requirements?",
+        "study_input_choice": "📚 *Study Material Input*\n━━━━━━━━━━━━━━━━━━━━\nYou selected: *{subject}*\n\nHow would you like to provide your study context or requirements?",
         "study_btn_upload_file": "📎 Upload File / PDF + Description",
         "study_btn_text_desc": "✍️ Add Text Description / Topic",
         "study_ask_text": "✍️ *Text Description / Topic*\n━━━━━━━━━━━━━━━━━━━━\nPlease enter a description of the topic or specific questions you want to focus on:",
@@ -148,7 +151,8 @@ TRANSLATIONS = {
         "btn_materials": "📎 የእኔ ማቴሪያሎች",
         "btn_socials": "🌟 ተከተሉን (Socials)",
         "btn_language": "🌐 ቋንቋ ቀይር",
-        "btn_help": "❓ እገዛ",
+        "btn_help": "ℹ️ እገዛ",
+        "btn_support": "📞 ድጋፍ",
         "btn_cancel": "❌ ሰርዝ",
         "btn_back": "🔙 ተመለስ",
         "btn_continue": "▶️ ቀጥል",
@@ -156,6 +160,7 @@ TRANSLATIONS = {
         "btn_study_mat": "📖 ይህን አጥና",
         "btn_upload_pdf": "📤 ፒዲኤፍ ጫን",
         "socials_title": "🌟 *ተጨማሪ ኢስላማዊ ማስታወሻዎችን ለማግኘት ይከተሉን*\n━━━━━━━━━━━━━━━━━━━━\n\nTelegram: [Yusuf Moha](https://t.me/yusufcodes)\nLinkedIn: [Yusuf Mohammed](https://www.linkedin.com/in/yusuf-mohammed-5272572b6)\nInstagram: [Yusuf Mohammed](https://instagram.com/kebilad_7488)\n\n━━━━━━━━━━━━━━━━━━━━\nአላህ መልካም ምንዳ ይክፈላችሁ 🤍",
+        "support_title": "📞 *የእርዳታ እና የድጋፍ መስመር*\n━━━━━━━━━━━━━━━━━━━━\n\nለማንኛውም ጥያቄ ወይም የቴክኒክ ድጋፍ:\n\n• 💬 ቴሌግራም: [@Cs1At07](https://t.me/Cs1At07)\n• 📱 ስልክ: `0928892344`\n\nበትምህርትዎ እንዲሳካልዎት ሁልጊዜ ከጎንዎ ነን! 🎓",
 
         # Registration
         "reg_welcome": "📝 *የተማሪ ምዝገባ*\n━━━━━━━━━━━━━━━━━━━━\nወደ ስማርት የጥናት ቦት እንኳን በደህና መጡ!\nመገለጫዎን እናዘጋጅ።\n\nእባክዎ ሙሉ ስምዎን ያስገቡ:",
@@ -170,9 +175,10 @@ TRANSLATIONS = {
         "reg_approved_notify": "🎉 *እንኳን ደስ አለዎት! ምዝገባዎ ተፈቅዷል!*\n━━━━━━━━━━━━━━━━━━━━\nአሁን የቦቱን አገልግሎት ሙሉ በሙሉ መጠቀም ይችላሉ።\nለመማር /study ይጠቀሙ ወይም ሜኑውን ይምረጡ!",
 
         # Study Mode
-        "study_mode_title": "📚 *የጥናት ሁነታ*\n━━━━━━━━━━━━━━━━━━━━\nለመማር የሚፈልጉትን የትምህርት ዓይነት ይምረጡ:",
+        "study_mode_title": "📚 *የጥናት ሁነታ*\n━━━━━━━━━━━━━━━━━━━━\nማጥናት የሚፈልጉትን የኮርስ ወይም የትምህርት ስም ያስገቡ:",
+        "study_ask_course": "📚 *ጥናት ጀምር*\n━━━━━━━━━━━━━━━━━━━━\nማጥናት የሚፈልጉትን የትምህርት ወይም የኮርስ ስም ያስገቡ (ለምሳሌ፦ *Computer Science*, *ሂሳብ*, *ባዮሎጂ*, *ፊዚክስ*):",
         "study_choose_topic": "{emoji} *{subject}*\n━━━━━━━━━━━━━━━━━━━━\nየጥናት ርዕስ ይምረጡ:",
-        "study_input_choice": "📚 *የጥናት ማቴሪያል ማስገቢያ*\n━━━━━━━━━━━━━━━━━━━━\nየመረጡት: *{subject} → {topic}*\n\nየጥናት ፍላጎትዎን ወይም ይዘትዎን እንዴት ማቅረብ ይፈልጋሉ?",
+        "study_input_choice": "📚 *የጥናት ማቴሪያል ማስገቢያ*\n━━━━━━━━━━━━━━━━━━━━\nየመረጡት: *{subject}*\n\nየጥናት ፍላጎትዎን ወይም ይዘትዎን እንዴት ማቅረብ ይፈልጋሉ?",
         "study_btn_upload_file": "📎 ፋይል / ፒዲኤፍ ጫን + ማብራሪያ",
         "study_btn_text_desc": "✍️ በጽሁፍ ማብራሪያ / ጥያቄ አስገባ",
         "study_ask_text": "✍️ *የጽሁፍ ማብራሪያ*\n━━━━━━━━━━━━━━━━━━━━\nማተኮር የሚፈልጉትን የርዕስ ማብራሪያ ወይም የተወሰኑ ጥያቄዎችን ይጻፉ:",
@@ -263,7 +269,8 @@ TRANSLATIONS = {
         "btn_materials": "📎 Meeshaalee Koo",
         "btn_socials": "🌟 Nu Hordofaa (Socials)",
         "btn_language": "🌐 Afaan Jijjiiri",
-        "btn_help": "❓ Gargaarsa",
+        "btn_help": "ℹ️ Gargaarsa",
+        "btn_support": "📞 Deeggarsa",
         "btn_cancel": "❌ Dhiisi",
         "btn_back": "🔙 Deebi'i",
         "btn_continue": "▶️ Itti Fufi",
@@ -271,6 +278,7 @@ TRANSLATIONS = {
         "btn_study_mat": "📖 Sanada Kana Qo'adhu",
         "btn_upload_pdf": "📤 PDF Fe'i",
         "socials_title": "🌟 *Yaadachiisa Islaamaa Dabalataaf Nu Hordofaa*\n━━━━━━━━━━━━━━━━━━━━\n\nTelegram: [Yusuf Moha](https://t.me/yusufcodes)\nLinkedIn: [Yusuf Mohammed](https://www.linkedin.com/in/yusuf-mohammed-5272572b6)\nInstagram: [Yusuf Mohammed](https://instagram.com/kebilad_7488)\n\n━━━━━━━━━━━━━━━━━━━━\nRabbiin jazaaykeessan isiniif haa kaffalu 🤍",
+        "support_title": "📞 *Teessoo Deeggarsaa fi Qunnamtii*\n━━━━━━━━━━━━━━━━━━━━\n\nGaaffii ykn deeggarsa teeknikaa kamiyyuuf:\n\n• 💬 Telegram: [@Cs1At07](https://t.me/Cs1At07)\n• 📱 Bilbila: `0928892344`\n\nBarnoota keessaniin akka milkooftan isin gargaaruuf qophiidha! 🎓",
 
         # Registration
         "reg_welcome": "📝 *Galmee Barataa*\n━━━━━━━━━━━━━━━━━━━━\nBaga nagaan gara Smart Study Bot dhuftan!\nPiroofayilii keessan haa qopheessinu.\n\nMaqaa keessan guutuu galchaa:",
@@ -285,9 +293,10 @@ TRANSLATIONS = {
         "reg_approved_notify": "🎉 *Baga Gammaddan! Galmeen keessan eeyyamameera!*\n━━━━━━━━━━━━━━━━━━━━\nAmma tajaajila botii guutummaatti fayyadamuu dandeessu.\nQo'annoo jalqabuuf /study fayyadamaa ykn meenuu filadhaa!",
 
         # Study Mode
-        "study_mode_title": "📚 *Haala Qo'annoo*\n━━━━━━━━━━━━━━━━━━━━\nGosa barnootaa barachuu barbaaddan filadhaa:",
+        "study_mode_title": "📚 *Haala Qo'annoo*\n━━━━━━━━━━━━━━━━━━━━\nGosa barnootaa ykn koorsii barachuu barbaaddan barreessaa:",
+        "study_ask_course": "📚 *Qo'annoo Jalqabi*\n━━━━━━━━━━━━━━━━━━━━\nGosa barnootaa, koorsii, ykn mata duree barachuu barbaaddan barreessaa (fkn: *Computer Science*, *Herrega*, *Baayoloojii*, *Fiiziksii*):",
         "study_choose_topic": "{emoji} *{subject}*\n━━━━━━━━━━━━━━━━━━━━\nMata duree qo'annoo filadhaa:",
-        "study_input_choice": "📚 *Galtee Meeshaa Qo'annoo*\n━━━━━━━━━━━━━━━━━━━━\nKan filattan: *{subject} → {topic}*\n\nFedhii ykn qabiyyee keessan akkamitti dhiyeessuu barbaaddu?",
+        "study_input_choice": "📚 *Galtee Meeshaa Qo'annoo*\n━━━━━━━━━━━━━━━━━━━━\nKan filattan: *{subject}*\n\nFedhii ykn qabiyyee keessan akkamitti dhiyeessuu barbaaddu?",
         "study_btn_upload_file": "📎 Faayilii / PDF Fe'i + Ibsa",
         "study_btn_text_desc": "✍️ Ibsa Barreeffamaa / Gaaffii Galchi",
         "study_ask_text": "✍️ *Ibsa Barreeffamaa*\n━━━━━━━━━━━━━━━━━━━━\nMata duree ykn gaaffilee irratti xiyyeeffachuu barbaaddan barreessaa:",

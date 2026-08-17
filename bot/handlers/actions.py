@@ -50,10 +50,17 @@ async def test_start(message: Message, state: FSMContext, telegram_id: Optional[
     
     try:
         prompt = (
-            f"Prepare a short written test in {lang} for a Grade {student.grade} student studying "
-            f"subject '{learning_session.subject}', topic '{learning_session.topic}'.\n"
-            f"Generate exactly 3 conceptual questions in {lang} to test their understanding.\n"
-            f"Keep the tone encouraging. Do not include answers or solutions."
+            f"You are preparing a formal written test in {lang} for a Grade {student.grade} student.\n"
+            f"Subject: '{learning_session.subject}', Topic: '{learning_session.topic}'.\n\n"
+            f"STRICT FORMATTING REQUIREMENTS:\n"
+            f"- Output EXACTLY 3 clear, high-yield conceptual exam questions.\n"
+            f"- DO NOT write any introductory welcome messages, background greetings, filler, or instructions.\n"
+            f"- DO NOT write any closing remarks, motivational quotes, or outro text.\n"
+            f"- DO NOT provide solutions, answers, or hints.\n"
+            f"- Format directly as:\n"
+            f"1. [Question 1 text]\n\n"
+            f"2. [Question 2 text]\n\n"
+            f"3. [Question 3 text]"
         )
         history = await conversation_service.get_history(tid)
         types_history = [
@@ -79,15 +86,11 @@ async def test_start(message: Message, state: FSMContext, telegram_id: Optional[
         
         await safe_edit(
             thinking,
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"📝 *Written Test Mode*\n"
+            f"📝 *Written Test: {learning_session.topic}*\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"📚 Subject: *{learning_session.subject} → {learning_session.topic}*\n\n"
-            f"Answer these questions and send your response in a single message when ready:\n\n"
+            f"{test_content.strip()}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"{test_content}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💡 _Type your answers in a reply message and send._"
+            f"✍️ _Type your answers in a reply message and send._"
         )
         
     except Exception as e:
@@ -98,8 +101,11 @@ async def test_start(message: Message, state: FSMContext, telegram_id: Optional[
 @router.callback_query(F.data == "menu_test", StateFilter(None))
 async def action_test_callback(callback: CallbackQuery, state: FSMContext):
     """Processes the test callback button."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     await test_start(callback.message, state, telegram_id=callback.from_user.id)
-    await callback.answer()
 
 @router.message(ActionStates.waiting_for_test_answer)
 async def process_test_answer(message: Message, state: FSMContext):
@@ -195,10 +201,13 @@ async def short_note_start(message: Message, telegram_id: Optional[int] = None):
     
     try:
         prompt = (
-            f"Create a concise study guide and short notes summary in {lang} for: "
-            f"subject '{learning_session.subject}', topic '{learning_session.topic}'.\n"
-            f"Format with bullet points, clean headings, and highlight critical formulas or concepts.\n"
-            f"Ensure it is tailored to a Grade {student.grade} level."
+            f"Write a concise revision short notes summary in {lang} for a Grade {student.grade} student on:\n"
+            f"Topic: '{learning_session.topic}' (Subject: '{learning_session.subject}').\n\n"
+            f"STRICT RULES:\n"
+            f"- DO NOT write any intro greeting (e.g., 'Welcome', 'Here are your notes').\n"
+            f"- DO NOT write any outro text (e.g., 'Good luck studying', 'Hope this helps').\n"
+            f"- Provide ONLY high-yield bullet points, core definitions, key formulas, and crucial exam facts.\n"
+            f"- Use clean Markdown with bold keywords."
         )
         history = await conversation_service.get_history(tid)
         types_history = [
@@ -217,13 +226,11 @@ async def short_note_start(message: Message, telegram_id: Optional[int] = None):
         
         await safe_edit(
             thinking,
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"📖 *Short Notes Summary*\n"
+            f"📖 *Short Notes: {learning_session.topic}*\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"📚 *{learning_session.subject} → {learning_session.topic}*\n\n"
-            f"{note_content}\n\n"
+            f"{note_content.strip()}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💡 Use /quiz to test your knowledge or /test for written practice",
+            f"💡 _Use /quiz or /test to practice this topic._",
             reply_markup=get_study_actions_keyboard()
         )
         
@@ -235,8 +242,11 @@ async def short_note_start(message: Message, telegram_id: Optional[int] = None):
 @router.callback_query(F.data == "menu_notes", StateFilter(None))
 async def action_note_callback(callback: CallbackQuery):
     """Processes the short note callback button."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
     await short_note_start(callback.message, telegram_id=callback.from_user.id)
-    await callback.answer()
 
 @router.message(Command("personalize"), StateFilter(None))
 async def personalize_start(message: Message, telegram_id: Optional[int] = None):
@@ -255,14 +265,32 @@ async def personalize_start(message: Message, telegram_id: Optional[int] = None)
         [InlineKeyboardButton(text="🎓 Change Grade", callback_data="change_grade")],
         [InlineKeyboardButton(text="🌐 Change Language", callback_data="change_lang")]
     ])
-    await message.answer(
+    await safe_reply(
+        message,
         f"⚙️ *Personalization & Learning Profile*\n\n"
         f"👤 *Grade Level:* {student.grade or 'Not Set'}\n"
         f"🌐 *Language:* {student.preferred_language or 'English'}\n\n"
         f"Select an option below to update your settings:",
-        parse_mode="Markdown",
         reply_markup=kb
     )
+
+@router.callback_query(F.data.in_(["action_personalize", "menu_personalize"]), StateFilter(None))
+async def action_personalize_callback(callback: CallbackQuery):
+    """Handles personalization callback button."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    await personalize_start(callback.message, telegram_id=callback.from_user.id)
+
+@router.callback_query(F.data == "menu_language", StateFilter(None))
+async def menu_language_callback(callback: CallbackQuery):
+    """Directly opens language switcher from main menu."""
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    await change_lang_callback(callback)
 
 @router.callback_query(F.data == "change_grade", StateFilter(None))
 async def change_grade_callback(callback: CallbackQuery):

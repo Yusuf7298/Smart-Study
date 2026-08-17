@@ -36,7 +36,7 @@ async def update_grade(telegram_id: int, grade: str) -> None:
     await asyncio.to_thread(
         student_repo.update_student_profile, 
         telegram_id, 
-        grade=grade, 
+        grade=grade,  # type: ignore
         education_level=edu_level
     )
 
@@ -70,7 +70,7 @@ async def register_student_pending(
         telegram_id,
         first_name,
         username,
-        grade,
+        grade, # type: ignore
         edu_level,
         preferred_language
     )

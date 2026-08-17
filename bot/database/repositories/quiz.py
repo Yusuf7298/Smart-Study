@@ -110,6 +110,18 @@ def set_quiz_status(quiz_session_id: int, status: str) -> None:
     conn.commit()
     conn.close()
 
+def deactivate_all_active_quizzes(telegram_id: int) -> None:
+    """Cancels/deactivates any currently ACTIVE quiz sessions for a student."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE quiz_sessions
+        SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP
+        WHERE telegram_id = ? AND status = 'ACTIVE'
+    """, (telegram_id,))
+    conn.commit()
+    conn.close()
+
 def save_quiz_question(
     quiz_session_id: int,
     question_number: int,
