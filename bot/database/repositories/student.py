@@ -162,7 +162,15 @@ def update_payment_screenshot(
     conn.commit()
     conn.close()
 
+def _clear_cache(telegram_id: int):
+    try:
+        from bot.services.student_service import invalidate_student_cache
+        invalidate_student_cache(telegram_id)
+    except Exception:
+        pass
+
 def approve_student(telegram_id: int) -> None:
+    _clear_cache(telegram_id)
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -175,8 +183,10 @@ def approve_student(telegram_id: int) -> None:
     """, (telegram_id,))
     conn.commit()
     conn.close()
+    _clear_cache(telegram_id)
 
 def reject_student(telegram_id: int, reason: Optional[str] = None) -> None:
+    _clear_cache(telegram_id)
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -188,8 +198,10 @@ def reject_student(telegram_id: int, reason: Optional[str] = None) -> None:
     """, (reason, telegram_id))
     conn.commit()
     conn.close()
+    _clear_cache(telegram_id)
 
 def update_approval_status(telegram_id: int, status: str) -> None:
+    _clear_cache(telegram_id)
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -199,8 +211,10 @@ def update_approval_status(telegram_id: int, status: str) -> None:
     """, (status, telegram_id))
     conn.commit()
     conn.close()
+    _clear_cache(telegram_id)
 
 def update_student_courses(telegram_id: int, courses: List[str]) -> None:
+    _clear_cache(telegram_id)
     conn = get_db_connection()
     cursor = conn.cursor()
     courses_json = json.dumps(courses, ensure_ascii=False)
@@ -211,6 +225,7 @@ def update_student_courses(telegram_id: int, courses: List[str]) -> None:
     """, (courses_json, telegram_id))
     conn.commit()
     conn.close()
+    _clear_cache(telegram_id)
 
 def update_student_profile(
     telegram_id: int, 

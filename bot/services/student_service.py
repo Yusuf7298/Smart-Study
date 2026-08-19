@@ -48,10 +48,20 @@ async def get_all_grade_prices() -> Dict[str, int]:
     from bot.database.database import get_all_grade_prices_sync
     return await asyncio.to_thread(get_all_grade_prices_sync)
 
+_STUDENT_CACHE: Dict[int, Optional[StudentModel]] = {}
+
+def invalidate_student_cache(telegram_id: int):
+    _STUDENT_CACHE.pop(telegram_id, None)
+
 async def get_student(telegram_id: int) -> Optional[StudentModel]:
-    return await asyncio.to_thread(student_repo.get_student_by_id, telegram_id)
+    if telegram_id in _STUDENT_CACHE:
+        return _STUDENT_CACHE[telegram_id]
+    student = await asyncio.to_thread(student_repo.get_student_by_id, telegram_id)
+    _STUDENT_CACHE[telegram_id] = student
+    return student
 
 async def register_student(telegram_id: int, first_name: Optional[str], username: Optional[str]) -> StudentModel:
+    invalidate_student_cache(telegram_id)
     return await asyncio.to_thread(student_repo.create_student, telegram_id, first_name, username)
 
 async def register_student_full(
@@ -65,8 +75,9 @@ async def register_student_full(
     payment_amount: int,
     approval_status: str = 'PAYMENT_PENDING'
 ) -> StudentModel:
+    invalidate_student_cache(telegram_id)
     edu_level = map_grade_to_education_level(grade)
-    return await asyncio.to_thread(
+    res = await asyncio.to_thread(
         student_repo.register_full_student,
         telegram_id=telegram_id,
         first_name=first_name,
@@ -79,6 +90,8 @@ async def register_student_full(
         payment_amount=payment_amount,
         approval_status=approval_status
     )
+    invalidate_student_cache(telegram_id)
+    return res
 
 async def register_student_pending(
     telegram_id: int,
@@ -105,15 +118,19 @@ async def submit_payment_screenshot(
     file_id: str,
     file_path: Optional[str] = None
 ) -> None:
+    invalidate_student_cache(telegram_id)
     await asyncio.to_thread(student_repo.update_payment_screenshot, telegram_id, file_id, file_path)
 
 async def approve_student(telegram_id: int) -> None:
+    invalidate_student_cache(telegram_id)
     await asyncio.to_thread(student_repo.approve_student, telegram_id)
 
 async def reject_student(telegram_id: int, reason: Optional[str] = None) -> None:
+    invalidate_student_cache(telegram_id)
     await asyncio.to_thread(student_repo.reject_student, telegram_id, reason)
 
 async def update_grade(telegram_id: int, grade: str) -> None:
+    invalidate_student_cache(telegram_id)
     edu_level = map_grade_to_education_level(grade)
     await asyncio.to_thread(
         student_repo.update_student_profile, 
@@ -123,11 +140,17 @@ async def update_grade(telegram_id: int, grade: str) -> None:
     )
 
 async def update_language(telegram_id: int, language: str) -> None:
+    invalidate_student_cache(telegram_id)
     await asyncio.to_thread(
         student_repo.update_student_profile, 
         telegram_id, 
         preferred_language=language
     )
+
+async def update_courses(telegram_id: int, courses: List[str]) -> None:
+    invalidate_student_cache(telegram_id)
+    await asyncio.to_thread(student_repo.update_student_courses, telegram_id, courses)
+    invalidate_student_cache(telegram_id)
 
 async def update_education_level(telegram_id: int, edu_level: str) -> None:
     await asyncio.to_thread(

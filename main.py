@@ -87,10 +87,11 @@ async def main():
     dp.include_router(actions_router)
     dp.include_router(study_tips_router)
     dp.include_router(chat_router)
+    await bot.delete_webhook(drop_pending_updates=True)
     while True:
         try:
             logging.info("Starting Ethio Smart Study Bot polling...")
-            await dp.start_polling(bot, handle_signals=True, polling_timeout=30)
+            await dp.start_polling(bot, handle_signals=True)
             break
         except (KeyboardInterrupt, SystemExit):
             logging.info("Ethio Smart Study Bot stopped gracefully.")

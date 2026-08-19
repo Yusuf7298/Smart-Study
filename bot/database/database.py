@@ -2,9 +2,18 @@ import sqlite3
 import logging
 import config
 
+from typing import Optional
+
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(config.DATABASE_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA cache_size=-64000;")
+        conn.execute("PRAGMA temp_store=MEMORY;")
+    except Exception:
+        pass
     return conn
 
 def init_db() -> None:
