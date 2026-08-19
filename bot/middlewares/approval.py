@@ -15,19 +15,20 @@ class ApprovalMiddleware(BaseMiddleware):
         state = data.get("state")
         current_state = await state.get_state() if state else None
         is_registering = isinstance(current_state, str) and current_state.startswith("RegistrationStates:")
+        is_free_trial_state = isinstance(current_state, str) and current_state.startswith("FreeTrialStates:")
+        is_admin_state = isinstance(current_state, str) and current_state.startswith("AdminStates:")
         is_admin = telegram_id in config.ADMIN_IDS
         
+        if is_admin or is_admin_state:
+            return await handler(event, data)
+            
         if isinstance(event, Message):
             command = event.text or event.caption or ""
-            if command.startswith(("/start", "/help", "/support", "/contact", "/socials")) or is_registering:
-                return await handler(event, data)
-            if is_admin and command.startswith(("/admin", "/broadcast")):
+            if command.startswith(("/start", "/help", "/support", "/contact", "/socials", "/freetrial", "/trial")) or is_registering or is_free_trial_state:
                 return await handler(event, data)
         elif isinstance(event, CallbackQuery):
             callback_data = event.data or ""
-            if is_registering or callback_data.startswith(("reg_", "menu_support", "menu_language", "menu_socials", "menu_help")):
-                return await handler(event, data)
-            if is_admin and callback_data.startswith("admin_"):
+            if is_registering or is_free_trial_state or callback_data.startswith(("reg_", "trial_", "menu_support", "menu_language", "menu_socials", "menu_help")):
                 return await handler(event, data)
         student = await student_service.get_student(telegram_id)
         is_cb = hasattr(event, "data") and isinstance(getattr(event, "data"), str)

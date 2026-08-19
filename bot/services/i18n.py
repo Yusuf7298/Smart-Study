@@ -199,6 +199,7 @@ TRANSLATIONS = {
         "btn_back": "🔙 Back",
         "btn_continue": "▶️ Continue",
         "btn_delete": "🗑️ Delete",
+        "btn_free_trial": "🎁 Try 1-Time Free AI Trial",
         "btn_study_mat": "📖 Study Material",
         "btn_upload_pdf": "📤 Upload PDF",
         "study_tips_menu_title": "💡 *Effective Study & Exam Success Coach*\n━━━━━━━━━━━━━━━━━━━━\nMaster how to study smarter, retain memory, manage time, and overcome exam stress with proven psychological techniques!\n\nSelect a topic or describe your specific study difficulty below:",
@@ -246,6 +247,12 @@ TRANSLATIONS = {
         "feedback_ask": "💬 *Student Feedback & Suggestions*\n━━━━━━━━━━━━━━━━━━━━\nWe value your feedback to make Ethio Smart Study Bot better for all students!\n\nPlease type your feedback, experience, or feature suggestion below (or send a photo/document):",
         "feedback_thanks": "✅ *Thank You for Your Feedback!*\n━━━━━━━━━━━━━━━━━━━━\nYour feedback has been submitted successfully to our private feedback channel.\nWe appreciate your support in making Ethio Smart Study Bot better! 🤍",
 
+        # Free Trial
+        "trial_ask_grade": "🎁 *1-Time Free AI Trial Session*\n━━━━━━━━━━━━━━━━━━━━\nSelect your Grade Level to test 3 sample AI-generated practice questions without registering:",
+        "trial_ask_subject": "🎁 *Select Free Trial Subject*\n━━━━━━━━━━━━━━━━━━━━\nGrade: *Grade {grade}*\n\nSelect a subject to try out 3 sample AI questions:",
+        "trial_already_used": "⚠️ *Free Trial Limit Reached*\n━━━━━━━━━━━━━━━━━━━━\nYou have already completed your 1-Time Free Trial session.\n\nTo unlock unlimited AI practice, study sessions, written tests, and National Exam Prep, please click /start to register and enroll!",
+        "trial_complete_card": "🎉 *Free Trial Completed!*\n━━━━━━━━━━━━━━━━━━━━\nScore: *{score}/{total} ({pct}%)*\n\n✨ *Unlock Unlimited Access:*\n• Unlimited AI Tutoring & Study Sessions\n• Summary Short Notes & PDF Processing\n• Ministry National Exam Practice\n\nClick /start to register & activate your full account!",
+
         # Admin Dynamic Pricing
         "admin_pricing_title": "💰 *Dynamic Course Pricing Management*\n━━━━━━━━━━━━━━━━━━━━\nCurrent price per course: *{price} ETB*\n\nTo update the price, enter the new amount in ETB (e.g. `60`):",
         "admin_pricing_updated": "✅ Course price updated successfully to *{price} ETB* per course!",
@@ -260,7 +267,7 @@ TRANSLATIONS = {
         "study_btn_text_desc": "✍️ Add Text Description / Topic",
         "study_ask_text": "✍️ *Text Description / Topic*\n━━━━━━━━━━━━━━━━━━━━\nPlease enter a description of the topic or specific questions you want to focus on:",
         "study_ask_file": "📎 *Upload File / PDF*\n━━━━━━━━━━━━━━━━━━━━\nPlease upload a PDF document or a photo of your study notes, with an optional description in the caption:",
-        "study_intro_thinking": "🤔 Preparing your lesson introduction...",
+        "study_intro_thinking": "⏳ Working, please wait...",
         "study_stopped": "⏹️ *Study Session Stopped*\n━━━━━━━━━━━━━━━━━━━━\nReturning to general chat mode.\nUse /study to start a new topic.",
         "no_active_session": "📚 You don't have an active study session yet.\n\nUse /study or select 📚 Study from the menu to start learning.",
         "current_session_title": "📚 *Current Study Session*\n━━━━━━━━━━━━━━━━━━━━\n🎓 *Grade:* {grade}\n{emoji} *Subject:* {subject}\n📌 *Topic:* {topic}\n🔄 *Stage:* {stage}\n📅 *Started:* {started}\n━━━━━━━━━━━━━━━━━━━━\n💡 /quiz to practice | /study to change topic | /cancel to stop",
@@ -292,7 +299,7 @@ TRANSLATIONS = {
 
         # Quiz
         "quiz_no_session": "📚 You don't have an active study session yet.\n\nUse /study or select 📚 Study from the menu to start learning.",
-        "quiz_generating": "🤔 Generating your personalized quiz question...",
+        "quiz_generating": "⏳ Working, please wait...",
         "quiz_mode_title": "❓ *Quiz Mode Started*\n━━━━━━━━━━━━━━━━━━━━\n📚 Subject: *{subject} → {topic}*\n\nGet ready for 5 adaptive questions!",
         "quiz_active_prompt": "❓ *You have an active quiz session in progress!*\nQuestion {current} of {total}.",
         "quiz_question_header": "━━━━━━━━━━━━━━━━━━━━\n{emoji} *{topic} — Quiz*\n━━━━━━━━━━━━━━━━━━━━\n📝 Question *{num}* of *{total}*\n\n{text}\n\n━━━━━━━━━━━━━━━━━━━━\n🇦  {opt_a}\n🇧  {opt_b}\n🇨  {opt_c}\n🇩  {opt_d}",
@@ -304,12 +311,12 @@ TRANSLATIONS = {
         # Written Test
         "test_title": "━━━━━━━━━━━━━━━━━━━━\n📝 *Written Test Mode*\n━━━━━━━━━━━━━━━━━━━━\n📚 Subject: *{subject} → {topic}*\n\nAnswer the following 3 conceptual questions in ONE message:\n\n━━━━━━━━━━━━━━━━━━━━\n{questions}\n\n━━━━━━━━━━━━━━━━━━━━\n💡 _Type all your answers in a single reply message and send._",
         "test_grading_title": "━━━━━━━━━━━━━━━━━━━━\n💯 *Test Evaluation Results*\n━━━━━━━━━━━━━━━━━━━━\n{result}\n\n━━━━━━━━━━━━━━━━━━━━\n💡 Retake with /test or practice with /quiz",
-        "test_evaluating": "💯 Evaluating your answers with AI, please wait a moment...",
+        "test_evaluating": "⏳ Working, please wait...",
         "test_history_title": "📝 *Previous Written Test Results*\n━━━━━━━━━━━━━━━━━━━━",
 
         # Short Notes
         "notes_title": "━━━━━━━━━━━━━━━━━━━━\n📖 *Short Notes Summary*\n━━━━━━━━━━━━━━━━━━━━\n📚 *{subject} → {topic}*\n\n{content}\n\n━━━━━━━━━━━━━━━━━━━━\n💡 Use /quiz to test your knowledge or /test for written practice",
-        "notes_generating": "📖 Preparing your short notes summary...",
+        "notes_generating": "⏳ Working, please wait...",
 
         # Progress
         "progress_title": "📊 *My Learning Progress*\n━━━━━━━━━━━━━━━━━━━━\n👤 Student: *{name}*\n🎓 Grade: *{grade}*\n🌐 Language: *{language}*\n\n📚 *Academic Statistics:*\n• 📖 Lessons Started: *{lessons_count}*\n• ❓ Quizzes Taken: *{quizzes_count}*\n• 🎯 Quiz Success Rate: *{quiz_avg_pct}%* ({total_correct}/{total_questions} correct)\n• 📝 Written Tests: *{tests_count}* (Avg Score: *{test_avg_score}/10*)\n• 📄 PDFs Uploaded: *{pdf_count}*\n\n📌 *Active Session:* {active_topic}\n━━━━━━━━━━━━━━━━━━━━\nKeep up the great work! 💪",
@@ -320,7 +327,7 @@ TRANSLATIONS = {
         "profile_btn_change_lang": "🌐 Change Language",
 
         # AI Tutor / Chat
-        "tutor_thinking": "🤔 Thinking...",
+        "tutor_thinking": "⏳ Working, please wait...",
         "ai_error": "⚠️ *Connection Error*\n━━━━━━━━━━━━━━━━━━━━\nI'm having trouble connecting to the AI right now.\nPlease try again in a moment.",
 
         # Help
@@ -363,7 +370,8 @@ TRANSLATIONS = {
         "btn_back": "🔙 ተመለስ",
         "btn_continue": "▶️ ቀጥል",
         "btn_delete": "🗑️ ሰርዝ",
-        "btn_study_mat": "📖 ይህን አጥና",
+        "btn_free_trial": "🎁 ነፃ 1 ጊዜ የሙከራ ትምህርት",
+        "btn_study_mat": "📖 የጥናት ማቴሪያል",
         "btn_upload_pdf": "📤 ፒዲኤፍ ጫን",
         "study_tips_menu_title": "💡 *ውጤታማ የጥናት እና የፈተና ስኬት መመሪያ*\n━━━━━━━━━━━━━━━━━━━━\nሳይንሳዊ እና ስነ-ልቦናዊ የጥናት መንገዶችን በመጠቀም በጥራት ማጠናትን፣ ጊዜን በአግባቡ መጠቀምን፣ የማስታወስ ችሎታን እና ትኩረት ማድረግን ይማሩ!\n\nከታች ካሉት አማራጮች ይምረጡ ወይም የእርስዎን የጥናት ችግር ይንገሩን:",
         "tips_btn_time": "⏰ የጊዜ አጠቃቀም እና Pomodoro",
@@ -458,12 +466,12 @@ TRANSLATIONS = {
         # Written Test
         "test_title": "━━━━━━━━━━━━━━━━━━━━\n📝 *የጽሁፍ ፈተና ሁነታ*\n━━━━━━━━━━━━━━━━━━━━\n📚 ትምህርት: *{subject} → {topic}*\n\nየሚከተሉትን 3 የጽሁፍ ጥያቄዎች በአንድ መልእክት ይመልሱ:\n\n━━━━━━━━━━━━━━━━━━━━\n{questions}",
         "test_grading_title": "━━━━━━━━━━━━━━━━━━━━\n💯 *የፈተና ውጤት እና ግምገማ*\n━━━━━━━━━━━━━━━━━━━━\n{result}",
-        "test_evaluating": "💯 መልሶችዎን በ AI እየገመገምን ነው፣ እባክዎ ትንሽ ይጠብቁ...",
+        "test_evaluating": "⏳ ይሰራል፣ እባክዎ ትንሽ ይጠብቁ...",
         "test_history_title": "📝 *ያለፉ የጽሁፍ ፈተና ውጤቶች*\n━━━━━━━━━━━━━━━━━━━━",
 
         # Short Notes
         "notes_title": "━━━━━━━━━━━━━━━━━━━━\n📖 *አጭር የጥናት ማጠቃለያ*\n━━━━━━━━━━━━━━━━━━━━\n📚 *{subject} → {topic}*\n\n{content}",
-        "notes_generating": "📖 አጭር ማስታወሻ በማዘጋጀት ላይ...",
+        "notes_generating": "⏳ ይሰራል፣ እባክዎ ትንሽ ይጠብቁ...",
 
         # Progress
         "progress_title": "📊 *የትምህርት እድገት እና ውጤቴ*\n━━━━━━━━━━━━━━━━━━━━\n👤 ተማሪ: *{name}*\n🎓 ክፍል: *{grade}*\n🌐 ቋንቋ: *{language}*\n\n📚 *ስታትስቲክስ:*\n• 📖 የተጀመሩ ትምህርቶች: *{lessons_count}*\n• ❓ የተወሰዱ ፈተናዎች: *{quizzes_count}*\n• 🎯 አማካይ ውጤት: *{quiz_avg_pct}%*\n• 📝 የጽሁፍ ፈተናዎች: *{tests_count}*\n• 📄 የተጫኑ ፒዲኤፎች: *{pdf_count}*",
@@ -474,11 +482,21 @@ TRANSLATIONS = {
         "profile_btn_change_lang": "🌐 ቋንቋ ቀይር",
 
         # AI Tutor / Chat
-        "tutor_thinking": "🤔 በማሰብ ላይ...",
+        "tutor_thinking": "⏳ ይሰራል፣ እባክዎ ትንሽ ይጠብቁ...",
         "ai_error": "⚠️ *የግንኙነት ስህተት*\n━━━━━━━━━━━━━━━━━━━━\nእባክዎ ከጥቂት ደቂቃዎች በኋላ እንደገና ይሞክሩ።",
 
         # Help
         "help_title": "❓ *ኢትዮ ስማርት የጥናት ቦት — የተጠቃሚ መመሪያ*\n━━━━━━━━━━━━━━━━━━━━\nእንኳን ወደ AI የግል አስተማሪዎ በደህና መጡ!",
+
+        # Feedback
+        "feedback_ask": "💬 *የተማሪዎች አስተያየት እና ጥቆማ*\n━━━━━━━━━━━━━━━━━━━━\nቦቱን የበለጠ ለማሻሻል የእርሶ አስተያየት ለእኛ በጣም ጠቃሚ ነው!\n\nእባክዎ አስተያየትዎን፣ ጥቆማዎን ወይም ያጋጠመዎትን ሁኔታ ከታች ይጻፉ (ወይም ፎቶ/ፋይል ይላኩ):",
+        "feedback_thanks": "✅ *ስለ አስተያየትዎ እናመሰግናለን!*\n━━━━━━━━━━━━━━━━━━━━\nአስተያየትዎ በተሳካ ሁኔታ ወደ አስተያየት ቻናላችን ተልኳል።\nቦታችንን የበለጠ ለማሻሻል ስላደረጉት አስተዋጽኦ እናመሰግናለን! 🤍",
+
+        # Free Trial
+        "trial_ask_grade": "🎁 *ነፃ 1 ጊዜ የ AI የሙከራ ትምህርት*\n━━━━━━━━━━━━━━━━━━━━\nሳይመዘገቡ 3 የ AI ጥያቄዎችን ለመሞከር ክፍሎትን ይምረጡ:",
+        "trial_ask_subject": "🎁 *የሙከራ ትምህርቱን ይምረጡ*\n━━━━━━━━━━━━━━━━━━━━\nክፍል: *ክፍል {grade}*\n\n3 የ AI ጥያቄዎችን ለመሞከር ትምህርት ይምረጡ:",
+        "trial_already_used": "⚠️ *የነፃ ሙከራ ገደብ ተደርሷል*\n━━━━━━━━━━━━━━━━━━━━\nየ 1 ጊዜ ነፃ የሙከራ ትምህርቶን ጨርሰዋል።\n\nሁሉንም የ AI ጥናቶች፣ ማስታወሻዎች እና የብሔራዊ ፈተና ልምምዶችን ለማግኘት እባክዎ /start በመጫን ይመዝገቡ!",
+        "trial_complete_card": "🎉 *የሙከራ ትምህርቱ ተጠናቋል!*\n━━━━━━━━━━━━━━━━━━━━\nውጤት: *{score}/{total} ({pct}%)*\n\n✨ *ሙሉ አገልግሎቱን ይክፈቱ:*\n• ያልተገደበ የ AI አስተማሪ እና የጥናት ሁነታ\n• አጭር ማጠቃለያዎች እና ፒዲኤፍ ማነበብ\n• የብሔራዊ እና ሚኒስቴር ፈተናዎች ልምምድ\n\nአካውንቶን ለማግበር እባክዎ /start ን ይጫኑ!",
 
         # Admin
         "admin_only_error": "❌ ይህን እርምጃ ለማከናወን ፈቃድ የለዎትም።",
@@ -516,8 +534,9 @@ TRANSLATIONS = {
         "btn_cancel": "❌ Dhiisi",
         "btn_back": "🔙 Duubatti",
         "btn_continue": "▶️ Itti Fufi",
-        "btn_delete": "🗑️ Haqii",
-        "btn_study_mat": "📖 Kana Qo'adhu",
+        "btn_delete": "🗑️ Dhiisi",
+        "btn_free_trial": "🎁 Yaalii Bilisaa 1-Yeroo",
+        "btn_study_mat": "📖 Meeshaa Qo'annoo",
         "btn_upload_pdf": "📤 PDF Ol-kaasi",
         "study_tips_menu_title": "💡 *Gorsa Qo'annoo fi Milkaa'ina Qormaataa*\n━━━━━━━━━━━━━━━━━━━━\nMalleen qorannoofi saayinsawaa fayyadamuun akkamitti bu'a qabeessummaan akka qo'attan, yeroo akka bulchattaniifi qormaataf akkamitti qophaa'an baradhaa!\n\nFilannoowwan armaan gadii keessaa filadhaa ykn rakkoo qo'annoo keessan nuuf barreessaa:",
         "tips_btn_time": "⏰ Bulchiinsa Yeroo fi Pomodoro",
@@ -600,7 +619,7 @@ TRANSLATIONS = {
 
         # Quiz
         "quiz_no_session": "📚 Qo'annoon jalqabame hin jiru.",
-        "quiz_generating": "🤔 Gaaffilee qopheessaa jira...",
+        "quiz_generating": "⏳ Hojjechaa jira, mee xiqqoo eegaa...",
         "quiz_mode_title": "❓ *Qormaanni Eegalame*\n━━━━━━━━━━━━━━━━━━━━\n📚 Gosa: *{subject} → {topic}*",
         "quiz_active_prompt": "❓ *Qormaanni hojjachaa jirtan jira!*\nGaaffii {current} keessaa {total}።",
         "quiz_question_header": "━━━━━━━━━━━━━━━━━━━━\n{emoji} *{topic} — Qormaata*\n━━━━━━━━━━━━━━━━━━━━\n📝 Gaaffii *{num}* / *{total}*\n\n{text}\n\n━━━━━━━━━━━━━━━━━━━━\n🇦  {opt_a}\n🇧  {opt_b}\n🇨  {opt_c}\n🇩  {opt_d}",
@@ -612,12 +631,12 @@ TRANSLATIONS = {
         # Written Test
         "test_title": "━━━━━━━━━━━━━━━━━━━━\n📝 *Qormaata Barreeffamaa*\n━━━━━━━━━━━━━━━━━━━━\n📚 Gosa: *{subject} → {topic}*\n\nGaaffilee 3 armaan gadii ergaa tokkoon deebisaa:\n\n━━━━━━━━━━━━━━━━━━━━\n{questions}",
         "test_grading_title": "━━━━━━━━━━━━━━━━━━━━\n💯 *Bu'aa Qormaataa fi Gamaaggama*\n━━━━━━━━━━━━━━━━━━━━\n{result}",
-        "test_evaluating": "💯 Deebii keessan AI'n gamaaggamaa jira...",
+        "test_evaluating": "⏳ Hojjechaa jira, mee xiqqoo eegaa...",
         "test_history_title": "📝 *Qormaatawwan Kanaan Duraa*\n━━━━━━━━━━━━━━━━━━━━",
 
         # Short Notes
         "notes_title": "━━━━━━━━━━━━━━━━━━━━\n📖 *Yaadannoo Gabaabaa*\n━━━━━━━━━━━━━━━━━━━━\n📚 *{subject} → {topic}*\n\n{content}",
-        "notes_generating": "📖 Yaadannoo gabaabaa qopheessaa jira...",
+        "notes_generating": "⏳ Hojjechaa jira, mee xiqqoo eegaa...",
 
         # Progress
         "progress_title": "📊 *Guddina Barnoota Koo*\n━━━━━━━━━━━━━━━━━━━━\n👤 Barataa: *{name}*\n🎓 Kutaa: *{grade}*\n🌐 Afaan: *{language}*\n\n📚 *Istaatistiksii:*\n• 📖 Barnoota Jalqabaman: *{lessons_count}*\n• ❓ Gaaffilee Qoraman: *{quizzes_count}*\n• 🎯 Qabxii Giddu-galeessaa: *{quiz_avg_pct}%*\n• 📝 Qormaata Barreeffamaa: *{tests_count}*\n• 📄 Sanadoota PDF: *{pdf_count}*",
@@ -628,7 +647,7 @@ TRANSLATIONS = {
         "profile_btn_change_lang": "🌐 Afaan Jijjiiri",
 
         # AI Tutor / Chat
-        "tutor_thinking": "🤔 Yaadaa jira...",
+        "tutor_thinking": "⏳ Hojjechaa jira, mee xiqqoo eegaa...",
         "ai_error": "⚠️ *Dogoggora Wal-qunnamtii*\n━━━━━━━━━━━━━━━━━━━━\nAmma AI wajjin wal-qunnamuu hin dandeenye. Mee daqiiqaa muraasa booda irra deebiin yaalaa.",
 
         # Help
@@ -643,6 +662,12 @@ TRANSLATIONS = {
         # Feedback
         "feedback_ask": "💬 *Yaada fi Yaada Barattootaa*\n━━━━━━━━━━━━━━━━━━━━\nBota keenya caalaatti fooyyessuuf yaadni keessan nuuf baay'ee murteessaadha!\n\nMee yaada ykn yaada keessan armaan gadiitti barreessaa (ykn suuraa/sanada ergaa):",
         "feedback_thanks": "✅ *Yaada Keessaniif Galatoomaa!*\n━━━━━━━━━━━━━━━━━━━━\nYaadni keessan karaa milkaa'inaan chaanaalii yaada keenyaatti ergameera.\nBota keenya fooyyessuuf gumaacha gootaniif galatoomaa! 🤍",
+
+        # Free Trial
+        "trial_ask_grade": "🎁 *Shaakala AI Yaalii Bilisaa 1-Yeroo*\n━━━━━━━━━━━━━━━━━━━━\nOsoo hin galmaa'in gaaffilee AI 3 yaaluuf kutaa keessan filadhaa:",
+        "trial_ask_subject": "🎁 *Barnoota Yaalii Filadhaa*\n━━━━━━━━━━━━━━━━━━━━\nKutaa: *Kutaa {grade}*\n\nGaaffilee 3 shaakaluuf barnoota filadhaa:",
+        "trial_already_used": "⚠️ *Daangaan Yaalii Bilisaa Xumurameera*\n━━━━━━━━━━━━━━━━━━━━\nYaalii bilisaa yeroo 1 xumurtaniiltu.\n\nTajaajila AI guutuu argachuuf mee /start cuqaasuun galmaa'aa!",
+        "trial_complete_card": "🎉 *Shaakalli Yaalii Xumurameera!*\n━━━━━━━━━━━━━━━━━━━━\nQabxii: *{score}/{total} ({pct}%)*\n\n✨ *Tajaajila Guutuu Banadhaa:*\n• Barsiisaa AI fi Qo'annoo Daangaa Malee\n• Yaadannoo Gababaa fi PDF dubbisuu\n• Qormaata Biyyooleessaa Shaakaluu\n\nAkkaawuntii keessan banachuuf /start cuqaasaa!",
 
         # Admin
         "admin_only_error": "❌ Gocha kana raawwachuuf heeyyama hin qabdan.",

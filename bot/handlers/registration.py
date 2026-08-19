@@ -30,6 +30,15 @@ class RegistrationStates(StatesGroup):
     waiting_for_payment_confirmation = State()
     waiting_for_payment_screenshot = State()
 
+@router.callback_query(F.data == "reg_start")
+async def start_registration_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    await state.set_state(RegistrationStates.waiting_for_name)
+    await safe_reply(callback.message, t("reg_welcome", "English"))
+
 def get_phone_keyboard(lang: str = "English") -> ReplyKeyboardMarkup:
     kb = [
         [KeyboardButton(text=t("btn_share_phone", lang), request_contact=True)],
@@ -270,7 +279,7 @@ async def process_language_callback(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     grade = data.get("grade")
     stream = data.get("stream")
-    price = await student_service.get_course_price()
+    price = await student_service.get_course_price(grade)
     prompt_text = t("reg_ask_subjects", lang, price=price)
     
     await safe_edit(
@@ -300,7 +309,7 @@ async def process_subject_toggle_callback(callback: CallbackQuery, state: FSMCon
         
     await state.update_data(selected_courses=selected_courses)
     
-    price = await student_service.get_course_price()
+    price = await student_service.get_course_price(grade)
     prompt_text = t("reg_ask_subjects", lang, price=price)
     
     await safe_edit(
@@ -329,7 +338,7 @@ async def process_subjects_done_callback(callback: CallbackQuery, state: FSMCont
     phone = data.get("phone_number", "N/A")
     username = callback.from_user.username or "N/A"
     
-    price = await student_service.get_course_price()
+    price = await student_service.get_course_price(grade)
     total_amount, price_details = student_service.calculate_student_payment(grade, len(selected_courses), price)
     await state.update_data(payment_amount=total_amount)
     await state.set_state(RegistrationStates.waiting_for_payment_confirmation)
@@ -390,7 +399,7 @@ async def process_payment_edit_callback(callback: CallbackQuery, state: FSMConte
     lang = data.get("language", "English")
     grade = data.get("grade")
     stream = data.get("stream")
-    price = await student_service.get_course_price()
+    price = await student_service.get_course_price(grade)
     
     await state.set_state(RegistrationStates.waiting_for_subjects)
     await safe_edit(
@@ -410,7 +419,7 @@ async def process_payment_proceed_callback(callback: CallbackQuery, state: FSMCo
     lang = data.get("language", "English")
     selected_courses = list(data.get("selected_courses", []))
     grade = data.get("grade", "10")
-    price = await student_service.get_course_price()
+    price = await student_service.get_course_price(grade)
     total_amount, _ = student_service.calculate_student_payment(grade, len(selected_courses), price)
     
     await student_service.register_student_full(
@@ -536,6 +545,28 @@ async def process_payment_screenshot(message: Message, state: FSMContext):
                     )
             except Exception as ae:
                 logging.error(f"Error sending payment notification to admin {admin_id}: {ae}")
+
+        target_payment_channel = config.parse_channel_id(config.PAYMENT_CHANNEL_ID)
+        if target_payment_channel:
+            try:
+                if message.photo:
+                    await message.bot.send_photo(
+                        chat_id=target_payment_channel,
+                        photo=file_id,
+                        caption=admin_card,
+                        parse_mode="HTML",
+                        reply_markup=admin_kb
+                    )
+                else:
+                    await message.bot.send_document(
+                        chat_id=target_payment_channel,
+                        document=file_id,
+                        caption=admin_card,
+                        parse_mode="HTML",
+                        reply_markup=admin_kb
+                    )
+            except Exception as pe:
+                logging.error(f"Error sending payment notification to channel {target_payment_channel}: {pe}", exc_info=True)
                 
     except Exception as e:
         logging.error(f"Error handling payment screenshot: {e}", exc_info=True)

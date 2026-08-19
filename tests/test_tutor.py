@@ -204,7 +204,7 @@ class TestStudentTutor(unittest.TestCase):
         
         run_async(chat_handler(mock_msg))
         
-        mock_msg.answer.assert_any_call("🤔 Thinking...")
+        mock_msg.answer.assert_any_call("⏳ Working, please wait...")
         mock_msg.answer.assert_any_call(
             "⚠️ *Connection Error*\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -352,9 +352,9 @@ class TestStudentTutor(unittest.TestCase):
         mock_msg.answer = AsyncMock()
         mock_state = AsyncMock()
         run_async(start_handler(mock_msg, mock_state))
-        from bot.handlers.registration import RegistrationStates
-        mock_state.set_state.assert_called_once_with(RegistrationStates.waiting_for_name)
-        self.assertIn("Student Registration", mock_msg.answer.call_args[0][0])
+        self.assertIn("Welcome to Ethio Smart Study Bot", mock_msg.answer.call_args[0][0])
+        reply_markup = mock_msg.answer.call_args[1].get("reply_markup")
+        self.assertIsNotNone(reply_markup)
 
     def test_approval_middleware_blocking(self):
         from bot.middlewares.approval import ApprovalMiddleware

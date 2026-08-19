@@ -25,13 +25,25 @@ UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(os.getcwd(), "data", "uploads"
 PAYMENT_RECEIPTS_DIR = os.getenv("PAYMENT_RECEIPTS_DIR", os.path.join(os.getcwd(), "data", "receipts"))
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "20"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
-
 DEFAULT_PRICE_PER_COURSE_ETB = int(os.getenv("PRICE_PER_COURSE_ETB", "50"))
 PAYMENT_OWNER_NAME = os.getenv("PAYMENT_OWNER_NAME", "Yusuf Mohammed")
 PAYMENT_CBE_ACCOUNT = os.getenv("PAYMENT_CBE_ACCOUNT", "1000359254718")
 PAYMENT_TELEBIRR_PHONE = os.getenv("PAYMENT_TELEBIRR_PHONE", "0928892344")
 PAYMENT_CHANNEL_ID = os.getenv("PAYMENT_CHANNEL_ID", "")
 FEEDBACK_CHANNEL_ID = os.getenv("FEEDBACK_CHANNEL_ID", os.getenv("PAYMENT_CHANNEL_ID", ""))
+
+def parse_channel_id(val: Any) -> Any:
+    if not val:
+        return None
+    val_str = str(val).strip()
+    if not val_str:
+        return None
+    if val_str.startswith("@"):
+        return val_str
+    try:
+        return int(val_str)
+    except ValueError:
+        return val_str
 
 SOCIALS_INFO = (
     "🌟 Follow for more Islamic reminders:\n\n"

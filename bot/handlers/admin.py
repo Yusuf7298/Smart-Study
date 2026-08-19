@@ -1,3 +1,4 @@
+from bot.database.models import StudentModel
 import logging
 import asyncio
 from typing import Optional, List
@@ -18,6 +19,7 @@ from bot.utils import safe_reply, safe_edit
 router = Router()
 
 class AdminStates(StatesGroup):
+    waiting_for_grade_select = State()
     waiting_for_new_price = State()
 
 def get_admin_dashboard_keyboard(pending_count: int) -> InlineKeyboardMarkup:
@@ -121,10 +123,10 @@ async def admin_refresh_callback(callback: CallbackQuery, state: Optional[FSMCon
 
 # ----------------- Dynamic Pricing -----------------
 
-@router.message(Command("admin_pricing"), StateFilter(None))
-@router.callback_query(F.data == "admin_act_pricing", StateFilter(None))
+@router.message(Command("admin_pricing"))
+@router.callback_query(F.data == "admin_act_pricing")
 async def admin_pricing_prompt(event: Message | CallbackQuery, state: FSMContext):
-    """Displays dynamic pricing settings and prompts admin for new price."""
+    """Displays dynamic pricing settings per grade and prompts admin to select a grade to update."""
     admin_id = event.from_user.id if event.from_user else None
     if not admin_id or admin_id not in config.ADMIN_IDS:
         if isinstance(event, CallbackQuery):
@@ -133,16 +135,41 @@ async def admin_pricing_prompt(event: Message | CallbackQuery, state: FSMContext
             await safe_reply(event, "❌ Unauthorized.")
         return
         
-    await state.set_state(AdminStates.waiting_for_new_price)
-    current_price = await student_service.get_course_price()
+    await state.set_state(AdminStates.waiting_for_grade_select)
+    default_price = await student_service.get_course_price()
+    custom_prices = await student_service.get_all_grade_prices()
     
+    price_lines = []
+    for g in ["5", "6", "7", "8", "9", "10", "11", "12"]:
+        p = custom_prices.get(g, default_price)
+        price_lines.append(f"• *Grade {g}:* {p} ETB")
+
     text = (
-        "💰 *Dynamic Course Pricing Settings*\n"
+        "💰 *Grade-Specific Dynamic Course Pricing*\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        f"Current price per course: *{current_price} ETB*\n\n"
-        "Please enter the new price per course in ETB (e.g. `60`, `75`):"
+        f"🌐 *Global Default Price:* {default_price} ETB\n\n"
+        "📊 *Current Grade Prices:*\n" +
+        "\n".join(price_lines) +
+        "\n━━━━━━━━━━━━━━━━━━━━\n"
+        "Select a Grade below to update its course price, or set the Global Default:"
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Cancel", callback_data="admin_back")]])
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Grade 5", callback_data="admin_pgrade_5"),
+            InlineKeyboardButton(text="Grade 6", callback_data="admin_pgrade_6"),
+            InlineKeyboardButton(text="Grade 7", callback_data="admin_pgrade_7"),
+            InlineKeyboardButton(text="Grade 8", callback_data="admin_pgrade_8")
+        ],
+        [
+            InlineKeyboardButton(text="Grade 9", callback_data="admin_pgrade_9"),
+            InlineKeyboardButton(text="Grade 10", callback_data="admin_pgrade_10"),
+            InlineKeyboardButton(text="Grade 11", callback_data="admin_pgrade_11"),
+            InlineKeyboardButton(text="Grade 12", callback_data="admin_pgrade_12")
+        ],
+        [InlineKeyboardButton(text="🌐 Default Price (All Grades)", callback_data="admin_pgrade_DEFAULT")],
+        [InlineKeyboardButton(text="🔙 Back to Dashboard", callback_data="admin_back")]
+    ])
     
     if isinstance(event, CallbackQuery):
         await safe_edit(event.message, text, reply_markup=kb) # type: ignore
@@ -150,9 +177,28 @@ async def admin_pricing_prompt(event: Message | CallbackQuery, state: FSMContext
     else:
         await safe_reply(event, text, reply_markup=kb)
 
+@router.callback_query(F.data.startswith("admin_pgrade_"))
+async def process_price_grade_select(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    grade_target = callback.data.split("admin_pgrade_")[1]
+    await state.update_data(target_grade=grade_target)
+    await state.set_state(AdminStates.waiting_for_new_price)
+
+    label = "Global Default (All Grades)" if grade_target == "DEFAULT" else f"Grade {grade_target}"
+    text = (
+        f"💰 *Update Course Price — {label}*\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"Please enter the new price per course in ETB for *{label}* (e.g. `60`, `75`, `100`):"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Cancel", callback_data="admin_act_pricing")]])
+    await safe_edit(callback.message, text, reply_markup=kb)
+
 @router.message(AdminStates.waiting_for_new_price)
 async def process_new_course_price(message: Message, state: FSMContext):
-    """Saves the new price per course to database."""
+    """Saves the new price per course to database for selected grade or default."""
     admin_id = message.from_user.id if message.from_user else None
     if not admin_id or admin_id not in config.ADMIN_IDS:
         await safe_reply(message, "❌ Unauthorized.")
@@ -168,15 +214,27 @@ async def process_new_course_price(message: Message, state: FSMContext):
     except ValueError:
         await safe_reply(message, "Please enter a valid numeric amount in ETB (e.g. 60):")
         return
-        
-    await student_service.set_course_price(new_price)
-    await asyncio.to_thread(admin_repo.log_admin_action, admin_id, "UPDATE_PRICING", None, f"Changed course price to {new_price} ETB")
+
+    data = await state.get_data()
+    target_grade = data.get("target_grade", "DEFAULT")
+
+    if target_grade == "DEFAULT":
+        await student_service.set_course_price(new_price)
+        label = "Global Default (All Grades)"
+    else:
+        await student_service.set_grade_course_price(target_grade, new_price)
+        label = f"Grade {target_grade}"
+
+    await asyncio.to_thread(admin_repo.log_admin_action, admin_id, "UPDATE_PRICING", None, f"Changed {label} course price to {new_price} ETB")
     await state.clear()
     
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Back to Dashboard", callback_data="admin_back")]])
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💰 Pricing Dashboard", callback_data="admin_act_pricing")],
+        [InlineKeyboardButton(text="🔙 Admin Dashboard", callback_data="admin_back")]
+    ])
     await safe_reply(
         message,
-        f"✅ *Course Price Updated!*\n━━━━━━━━━━━━━━━━━━━━\nNew price is now *{new_price} ETB* per course.",
+        f"✅ *Course Price Updated!*\n━━━━━━━━━━━━━━━━━━━━\nNew course price for *{label}* is now *{new_price} ETB*.",
         reply_markup=kb
     )
 
@@ -893,6 +951,5 @@ async def broadcast_command(message: Message):
         message,
         f"✅ *Broadcast Completed!*\n\n• Delivered: *{sent_count}*\n• Failed / Blocked: *{fail_count}*"
     )
-
-# Alias for backward compatibility
+    
 admin_command = admin_dashboard

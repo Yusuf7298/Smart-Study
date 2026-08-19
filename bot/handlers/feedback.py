@@ -5,7 +5,6 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-
 import config
 from bot.services import student_service
 from bot.services.i18n import t
@@ -64,21 +63,24 @@ async def process_student_feedback(message: Message, state: FSMContext):
     feedback_text = message.text or message.caption or "Uploaded Feedback Material (Photo/Document)"
 
     channel_post = (
-        "💬 *NEW STUDENT FEEDBACK RECEIVED*\n"
+        "💬 NEW STUDENT FEEDBACK RECEIVED\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 *Student Name:* {name_str}\n"
-        f"📱 *Phone:* `{phone_str}`\n"
-        f"🏷️ *Username:* {username_str}\n"
-        f"🆔 *Telegram ID:* `{telegram_id}`\n"
-        f"🎓 *Grade:* {grade_str}\n"
-        f"🌐 *Language:* {lang}\n"
-        f"📅 *Timestamp:* `{submitted_at}`\n"
+        f"👤 Student Name: {name_str}\n"
+        f"📱 Phone:`{phone_str}`\n"
+        f"🏷️ Username: {username_str}\n"
+        f"🆔 Telegram ID: `{telegram_id}`\n"
+        f"🎓 Grade: {grade_str}\n"
+        f"🌐 Language: {lang}\n"
+        f"📅 Timestamp: `{submitted_at}`\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "📝 *Feedback / Suggestion:*\n"
+        "📝 Feedback / Suggestion:\n"
         f"\"{feedback_text}\""
     )
 
-    target_channel = config.FEEDBACK_CHANNEL_ID or (config.ADMIN_IDS[0] if config.ADMIN_IDS else None)
+    raw_channel = config.FEEDBACK_CHANNEL_ID or config.PAYMENT_CHANNEL_ID
+    target_channel = config.parse_channel_id(raw_channel)
+    if not target_channel and config.ADMIN_IDS:
+        target_channel = config.ADMIN_IDS[0]
 
     if target_channel:
         try:

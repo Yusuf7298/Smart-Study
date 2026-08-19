@@ -22,6 +22,14 @@ def init_db() -> None:
     cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('price_per_course', ?)", (str(config.DEFAULT_PRICE_PER_COURSE_ETB),))
     
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS grade_prices (
+            grade TEXT PRIMARY KEY,
+            price_per_course INTEGER NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS students (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             telegram_id INTEGER UNIQUE NOT NULL,
@@ -357,3 +365,85 @@ async def init_database() -> None:
     init_db()
     from bot.database.mongo import init_mongo_db
     await init_mongo_db()
+
+def get_grade_price_sync(grade: str) -> Optional[int]:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT price_per_course FROM grade_prices WHERE grade = ?", (str(grade),))
+        row = cursor.fetchone()
+        conn.close()
+        if row and row[0] is not None:
+            return int(row[0])
+    except sqlite3.OperationalError:
+        pass
+    except Exception as e:
+        logging.error(f"Error fetching grade price: {e}")
+    return None
+
+def set_grade_price_sync(grade: str, price: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS grade_prices (
+            grade TEXT PRIMARY KEY,
+            price_per_course INTEGER NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        INSERT INTO grade_prices (grade, price_per_course, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(grade) DO UPDATE SET price_per_course = EXCLUDED.price_per_course, updated_at = CURRENT_TIMESTAMP
+    """, (str(grade), price))
+    conn.commit()
+    conn.close()
+
+def get_all_grade_prices_sync() -> dict:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT grade, price_per_course FROM grade_prices")
+        rows = cursor.fetchall()
+        conn.close()
+        return {str(r[0]): int(r[1]) for r in rows} if rows else {}
+    except sqlite3.OperationalError:
+        return {}
+    except Exception as e:
+        logging.error(f"Error fetching all grade prices: {e}")
+        return {}
+
+def has_used_free_trial_sync(telegram_id: int) -> bool:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT telegram_id FROM free_trials WHERE telegram_id = ?", (telegram_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return bool(row)
+    except sqlite3.OperationalError:
+        return False
+    except Exception as e:
+        logging.error(f"Error checking free trial status: {e}")
+        return False
+
+def record_free_trial_usage_sync(telegram_id: int, grade: str, subject: str):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS free_trials (
+                telegram_id INTEGER PRIMARY KEY,
+                grade TEXT,
+                subject TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            INSERT OR REPLACE INTO free_trials (telegram_id, grade, subject, created_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        """, (telegram_id, str(grade), str(subject)))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.error(f"Error recording free trial usage: {e}")

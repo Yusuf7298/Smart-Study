@@ -25,7 +25,12 @@ def map_grade_to_education_level(grade: str) -> str:
         return "University"
     return "Higher Education"
 
-async def get_course_price() -> int:
+async def get_course_price(grade: Optional[str] = None) -> int:
+    if grade:
+        from bot.database.database import get_grade_price_sync
+        custom_price = await asyncio.to_thread(get_grade_price_sync, str(grade))
+        if custom_price is not None:
+            return custom_price
     try:
         val = await asyncio.to_thread(student_repo.get_system_setting, "price_per_course", str(config.DEFAULT_PRICE_PER_COURSE_ETB))
         return int(val)
@@ -34,6 +39,14 @@ async def get_course_price() -> int:
 
 async def set_course_price(price: int) -> None:
     await asyncio.to_thread(student_repo.set_system_setting, "price_per_course", str(max(0, price)))
+
+async def set_grade_course_price(grade: str, price: int) -> None:
+    from bot.database.database import set_grade_price_sync
+    await asyncio.to_thread(set_grade_price_sync, str(grade), max(0, price))
+
+async def get_all_grade_prices() -> Dict[str, int]:
+    from bot.database.database import get_all_grade_prices_sync
+    return await asyncio.to_thread(get_all_grade_prices_sync)
 
 async def get_student(telegram_id: int) -> Optional[StudentModel]:
     return await asyncio.to_thread(student_repo.get_student_by_id, telegram_id)
@@ -74,7 +87,7 @@ async def register_student_pending(
     grade: str,
     preferred_language: str
 ) -> StudentModel:
-    price = await get_course_price()
+    price = await get_course_price(grade)
     return await register_student_full(
         telegram_id=telegram_id,
         first_name=first_name,
@@ -194,18 +207,22 @@ async def set_exam_package_access(telegram_id: int, has_access: bool = True) -> 
 
 def calculate_student_payment(grade: Optional[str], course_count: int, base_price: int) -> Tuple[int, Dict[str, Any]]:
     grade_str = str(grade).strip() if grade else ""
+    from bot.database.database import get_grade_price_sync
+    custom_price = get_grade_price_sync(grade_str) if grade_str else None
+    effective_base_price = custom_price if custom_price is not None else base_price
+
     is_exam_grade = grade_str in ["6", "8", "12"]
     
     if is_exam_grade:
         review_multiplier = 3 if grade_str == "12" else 1
-        review_fee_per_course = int(round(review_multiplier * (base_price * 0.25)))
-        per_course_bundle = base_price + review_fee_per_course
-        total = max(course_count * per_course_bundle, base_price)
+        review_fee_per_course = int(round(review_multiplier * (effective_base_price * 0.25)))
+        per_course_bundle = effective_base_price + review_fee_per_course
+        total = max(course_count * per_course_bundle, effective_base_price)
         details = {
             "is_grade_12_package": grade_str == "12",
             "is_exam_package": True,
             "grade_bundle": grade_str,
-            "base_price": base_price,
+            "base_price": effective_base_price,
             "review_fee_per_course": review_fee_per_course,
             "per_course_bundle": per_course_bundle,
             "course_count": course_count,
@@ -213,14 +230,14 @@ def calculate_student_payment(grade: Optional[str], course_count: int, base_pric
         }
         return total, details
     else:
-        total = course_count * base_price
+        total = course_count * effective_base_price
         details = {
             "is_grade_12_package": False,
             "is_exam_package": False,
             "grade_bundle": grade_str,
-            "base_price": base_price,
+            "base_price": effective_base_price,
             "review_fee_per_course": 0,
-            "per_course_bundle": base_price,
+            "per_course_bundle": effective_base_price,
             "course_count": course_count,
             "total": total
         }

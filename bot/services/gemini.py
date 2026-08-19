@@ -930,13 +930,13 @@ async def ask_gemini(question: str) -> str:
     return ans
 
 async def generate_quiz_question(
-    student: StudentModel,
+    student: Optional[StudentModel],
     subject: str,
     topic: str
 ) -> tuple[str, dict[str, str], str, str]:
     """Generates a single multiple-choice question for the given subject/topic/grade."""
-    lang = student.preferred_language or "English"
-    grade_str = str(student.grade) if student.grade is not None else "12"
+    lang = (student.preferred_language if student else None) or "English"
+    grade_str = str(student.grade) if (student and student.grade is not None) else "10"
     prompt = (
         f"You are the master Ethiopian exam tutor generating an authoritative quiz question in {lang}.\n"
         f"Subject: {subject}\n"

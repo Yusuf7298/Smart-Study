@@ -33,7 +33,22 @@ async def cancel_quiz(telegram_id: int) -> None:
 async def generate_and_save_question(quiz_session: QuizSessionModel) -> Optional[QuizQuestionModel]:
     student = await student_service.get_student(quiz_session.telegram_id)
     if not student:
-        raise ValueError("Student not found")
+        import re
+        from bot.database.models import StudentModel
+        from bot.services.student_service import map_grade_to_education_level
+        # Extract grade from topic string if present (e.g., Grade 11)
+        grade_match = re.search(r'Grade\s*(\d+)', quiz_session.topic)
+        grade_val = grade_match.group(1) if grade_match else "10"
+        student = StudentModel(
+            id=0,
+            telegram_id=quiz_session.telegram_id,
+            first_name="Free Trial Student",
+            username=None,
+            grade=grade_val,
+            education_level=map_grade_to_education_level(grade_val),
+            preferred_language="English",
+            approval_status="FREE_TRIAL"
+        )
         
     next_question_number = quiz_session.current_question + 1
     

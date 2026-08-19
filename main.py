@@ -24,6 +24,7 @@ from bot.handlers.materials import router as materials_router
 from bot.handlers.study_tips import router as study_tips_router
 from bot.handlers.exam import router as exam_router
 from bot.handlers.feedback import router as feedback_router
+from bot.handlers.freetrial import router as freetrial_router
 from bot.handlers.chat import router as chat_router
 
 from bot.middlewares.approval import ApprovalMiddleware
@@ -82,6 +83,7 @@ async def main():
     dp.include_router(quiz_router)
     dp.include_router(exam_router)
     dp.include_router(feedback_router)
+    dp.include_router(freetrial_router)
     dp.include_router(actions_router)
     dp.include_router(study_tips_router)
     dp.include_router(chat_router)

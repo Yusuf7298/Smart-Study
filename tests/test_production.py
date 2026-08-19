@@ -537,6 +537,41 @@ class TestProductionReadiness(unittest.TestCase):
 
         # Verify state exists
         self.assertTrue(hasattr(FeedbackStates, "waiting_for_feedback"))
+
+        # Verify parse_channel_id helper
+        from config import parse_channel_id
+        self.assertEqual(parse_channel_id("-1002244889900"), -1002244889900)
+        self.assertEqual(parse_channel_id("@my_feedback_channel"), "@my_feedback_channel")
+        self.assertIsNone(parse_channel_id(""))
+
+    def test_grade_specific_pricing(self):
+        # Test setting custom price per grade
+        run_async(student_service.set_grade_course_price("12", 75))
+        run_async(student_service.set_grade_course_price("6", 40))
+
+        p12 = run_async(student_service.get_course_price("12"))
+        p6 = run_async(student_service.get_course_price("6"))
+        p7 = run_async(student_service.get_course_price("7"))
+
+        self.assertEqual(p12, 75)
+        self.assertEqual(p6, 40)
+        self.assertEqual(p7, 50) # Fallback to default
+
+        tot12, det12 = student_service.calculate_student_payment("12", 2, 50)
+        self.assertEqual(det12["base_price"], 75)
+
+    def test_free_trial_feature(self):
+        from bot.database.database import has_used_free_trial_sync, record_free_trial_usage_sync
+        from bot.handlers.freetrial import FreeTrialStates
+
+        test_id = 88776655
+        self.assertFalse(has_used_free_trial_sync(test_id))
+
+        record_free_trial_usage_sync(test_id, "10", "Physics")
+        self.assertTrue(has_used_free_trial_sync(test_id))
+
+        self.assertTrue(hasattr(FreeTrialStates, "waiting_for_grade"))
+        self.assertTrue(hasattr(FreeTrialStates, "waiting_for_subject"))
     def test_full_registration_with_phone_and_courses(self):
         user_id = 998877
         courses = ["Biology", "Mathematics", "Computer Science"]

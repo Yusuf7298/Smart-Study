@@ -70,11 +70,18 @@ async def start(message: Message, state: FSMContext):
 
     student = await student_service.get_student(telegram_id)
     if not student or student.approval_status in ['REGISTRATION_PENDING', 'REJECTED']:
-        await state.set_state(RegistrationStates.waiting_for_name)
-        await safe_reply(
-            message,
-            t("reg_welcome", "English")
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎁 Try 1-Time Free AI Trial", callback_data="trial_start")],
+            [InlineKeyboardButton(text="🚀 Register & Enroll Now", callback_data="reg_start")]
+        ])
+        welcome_text = (
+            "🎓 *Welcome to Ethio Smart Study Bot!*\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "Your AI Personal Tutor for Ethiopian Curriculum (Grades 5–12).\n\n"
+            "Choose an option below to begin:"
         )
+        await safe_reply(message, welcome_text, reply_markup=kb)
         return
 
     lang = student.preferred_language or "English"
