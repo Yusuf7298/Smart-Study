@@ -4,8 +4,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+BOT_NAME = os.getenv("BOT_NAME", "Ethio Smart Study")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+MONGO_URI = os.getenv("MONGO_URI", "") or os.getenv("MONGODB_URI", "")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ethio_smart_study")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "tutor_bot.db")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 
@@ -17,14 +20,19 @@ for x in raw_admins.split(","):
         ADMIN_IDS.append(int(x_clean))
 if not ADMIN_IDS:
     ADMIN_IDS = [8223004316]
-
-# File and Rate Limit Configuration
 MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(os.getcwd(), "data", "uploads"))
+PAYMENT_RECEIPTS_DIR = os.getenv("PAYMENT_RECEIPTS_DIR", os.path.join(os.getcwd(), "data", "receipts"))
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "20"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 
-# Socials & Islamic Reminders Configuration
+DEFAULT_PRICE_PER_COURSE_ETB = int(os.getenv("PRICE_PER_COURSE_ETB", "50"))
+PAYMENT_OWNER_NAME = os.getenv("PAYMENT_OWNER_NAME", "Yusuf Mohammed")
+PAYMENT_CBE_ACCOUNT = os.getenv("PAYMENT_CBE_ACCOUNT", "1000359254718")
+PAYMENT_TELEBIRR_PHONE = os.getenv("PAYMENT_TELEBIRR_PHONE", "0928892344")
+PAYMENT_CHANNEL_ID = os.getenv("PAYMENT_CHANNEL_ID", "")
+FEEDBACK_CHANNEL_ID = os.getenv("FEEDBACK_CHANNEL_ID", os.getenv("PAYMENT_CHANNEL_ID", ""))
+
 SOCIALS_INFO = (
     "🌟 Follow for more Islamic reminders:\n\n"
     "Telegram: [Yusuf Moh](https://t.me/yusufcodes)\n"
@@ -33,9 +41,8 @@ SOCIALS_INFO = (
     "May Allah reward you 🤍"
 )
 
-# Support & Contact Configuration
 SUPPORT_INFO = (
-    "📞 *Support & Contact Information*\n"
+    "📞 Support & Contact Information\n"
     "━━━━━━━━━━━━━━━━━━━━\n\n"
     "For inquiries, help, or technical support:\n\n"
     "• 💬 Telegram: [Cs1At07](https://t.me/Cs1At07)\n"
@@ -43,19 +50,17 @@ SUPPORT_INFO = (
     "We are here to assist you anytime! 🎓"
 )
 
-# Centralized Subjects & Topics Configuration
+from typing import Optional, List, Dict, Any
+
 SUBJECTS = {
-    "Computer Science": {
-        "emoji": "💻",
+    "English": {
+        "emoji": "📖",
         "topics": [
-            "🐍 Python",
-            "🎨 CSS",
-            "💛 JavaScript",
-            "🌐 HTML",
-            "➕ C++",
-            "☕ Java",
-            "🚀 Next.js",
-            "📝 Other"
+            "📝 English Grammar",
+            "📚 Vocabulary & Idioms",
+            "📖 Reading Comprehension",
+            "✍️ Essay & Creative Writing",
+            "🎭 World Literature & Communication"
         ]
     },
     "Mathematics": {
@@ -69,6 +74,26 @@ SUBJECTS = {
             "📝 General Math"
         ]
     },
+    "Mathematics (Natural Science)": {
+        "emoji": "🧮",
+        "topics": [
+            "🔢 Advanced Algebra & Functions",
+            "📈 Trigonometry & Vector Analysis",
+            "∫ Differential & Integral Calculus",
+            "📊 Probability & Statistics",
+            "📐 Analytical Geometry"
+        ]
+    },
+    "Mathematics (Social Science)": {
+        "emoji": "🧮",
+        "topics": [
+            "🔢 Commercial Arithmetic & Algebra",
+            "📈 Financial Mathematics & Interest",
+            "📊 Applied Statistics & Data Analysis",
+            "📐 Coordinate Geometry",
+            "✍️ Matrices & Linear Programming"
+        ]
+    },
     "Physics": {
         "emoji": "⚛️",
         "topics": [
@@ -77,16 +102,6 @@ SUBJECTS = {
             "⚡ Electricity & Magnetism",
             "💡 Optics & Waves",
             "🌌 Modern Physics"
-        ]
-    },
-    "Biology": {
-        "emoji": "🧬",
-        "topics": [
-            "🔬 Cell Biology",
-            "🧬 Genetics & DNA",
-            "🫀 Human Physiology",
-            "🌿 Ecology & Plants",
-            "🦕 Evolution & Diversity"
         ]
     },
     "Chemistry": {
@@ -99,6 +114,25 @@ SUBJECTS = {
             "🧪 Acids, Bases & Salts"
         ]
     },
+    "Biology": {
+        "emoji": "🧬",
+        "topics": [
+            "🔬 Cell Biology",
+            "🧬 Genetics & DNA",
+            "🫀 Human Physiology",
+            "🌿 Ecology & Plants",
+            "🦕 Evolution & Diversity"
+        ]
+    },
+    "History": {
+        "emoji": "📜",
+        "topics": [
+            "🇪🇹 Ethiopian & Horn of Africa History",
+            "🌍 African & World Civilizations",
+            "⚔️ World Wars & Modern Era",
+            "🏛️ Ancient Civilizations & Heritage"
+        ]
+    },
     "Geography": {
         "emoji": "🌍",
         "topics": [
@@ -109,26 +143,235 @@ SUBJECTS = {
             "🌱 Environmental Studies"
         ]
     },
-    "English": {
-        "emoji": "📖",
+    "Economics": {
+        "emoji": "📊",
         "topics": [
-            "📝 English Grammar",
-            "📚 Vocabulary & Idioms",
-            "📖 Reading Comprehension",
-            "✍️ Essay & Creative Writing",
-            "🎭 World Literature"
+            "📈 Microeconomics & Market Dynamics",
+            "🏦 Macroeconomics & Fiscal Policy",
+            "🌍 Ethiopian Economy & Development",
+            "💵 Money, Banking & International Trade"
         ]
     },
-    "School Subjects": {
-        "emoji": "🏫",
+    "Citizenship Education": {
+        "emoji": "⚖️",
         "topics": [
-            "⚛️ Physics",
-            "🧬 Biology",
-            "🧪 Chemistry",
-            "🌍 Others"
+            "🏛️ Constitutional Democracy & Governance",
+            "⚖️ Rule of Law & Human Rights",
+            "🤝 Ethics, Patriotism & Civic Duty",
+            "🌍 Global Citizenship & International Relations"
+        ]
+    },
+    "Civics": {
+        "emoji": "⚖️",
+        "topics": [
+            "🏛️ Constitutional Democracy & Governance",
+            "⚖️ Rule of Law & Human Rights",
+            "🤝 Ethics, Patriotism & Civic Duty",
+            "🌍 Global Citizenship & International Relations"
+        ]
+    },
+    "Information Technology (IT)": {
+        "emoji": "💻",
+        "topics": [
+            "💻 Fundamentals of IT & Hardware",
+            "🌐 Networking & Web Technologies",
+            "🐍 Programming Basics & Algorithms",
+            "🗄️ Database Management Systems",
+            "🛡️ Cybersecurity & Ethics"
+        ]
+    },
+    "Computer Science": {
+        "emoji": "💻",
+        "topics": [
+            "🐍 Python",
+            "🎨 CSS",
+            "💛 JavaScript",
+            "🌐 HTML",
+            "➕ C++",
+            "☕ Java",
+            "🚀 Next.js",
+            "📝 Other"
+        ]
+    },
+    "Health and Physical Education (HPE)": {
+        "emoji": "🏃",
+        "topics": [
+            "🏃 Physical Fitness & Athletics",
+            "🥗 Nutrition & Personal Health",
+            "🫀 Human Anatomy & Exercise Science",
+            "⚽ Sports Skills & Teamwork",
+            "🧘 Mental Health & Wellness"
+        ]
+    },
+    "National/Regional Language": {
+        "emoji": "🗣️",
+        "topics": [
+            "📝 Grammar & Language Structure",
+            "📚 Reading Comprehension & Literature",
+            "✍️ Creative & Expository Writing",
+            "🗣️ Oral Communication & Culture"
+        ]
+    },
+    "Agriculture": {
+        "emoji": "🌾",
+        "topics": [
+            "🌾 Crop Science & Soil Fertility",
+            "🐄 Animal Husbandry & Production",
+            "🚜 Farm Tools & Mechanization",
+            "🌲 Forestry & Natural Resource Management",
+            "📈 Agribusiness & Agricultural Economics"
+        ]
+    },
+    "Environmental Science": {
+        "emoji": "🌱",
+        "topics": [
+            "🌱 Living Things & Ecosystems",
+            "💧 Water & Natural Resources",
+            "🌦️ Weather & Climate Change",
+            "🧹 Environmental Hygiene & Conservation"
+        ]
+    },
+    "Social Studies": {
+        "emoji": "🗺️",
+        "topics": [
+            "🏔️ Local & Regional Geography",
+            "📜 History of Our Community",
+            "🏛️ Culture & Society",
+            "🏙️ Community Services & Livelihood"
+        ]
+    },
+    "Moral and Citizenship Education": {
+        "emoji": "⚖️",
+        "topics": [
+            "🤝 Ethics, Moral Values & Respect",
+            "⚖️ Rights & Responsibilities",
+            "🕊️ Peace & National Unity",
+            "🏛️ Civic Participation & Governance"
+        ]
+    },
+    "Performing and Visual Arts (PVA)": {
+        "emoji": "🎨",
+        "topics": [
+            "🎨 Drawing, Painting & Visual Arts",
+            "🎵 Music & Cultural Songs",
+            "🎭 Theatre, Drama & Dance",
+            "🏺 Traditional Crafts & Design"
+        ]
+    },
+    "General Science": {
+        "emoji": "🔬",
+        "topics": [
+            "🔬 Foundational Biology & Cells",
+            "⚗️ Basic Chemistry & Matter",
+            "⚛️ Introductory Physics & Energy",
+            "🌿 Ecosystems & Natural Systems"
+        ]
+    },
+    "Career and Technical Education (CTE)": {
+        "emoji": "🛠️",
+        "topics": [
+            "🛠️ Introduction to Technical Skills",
+            "💼 Business & Entrepreneurship Basics",
+            "🌾 Agricultural & Vocational Arts",
+            "🖥️ Digital & Practical Work Skills"
         ]
     }
 }
+
+STREAMS = {
+    "Natural Science": {
+        "emoji": "🔬",
+        "name": "Natural Science",
+        "subjects": [
+            "English",
+            "Mathematics (Natural Science)",
+            "Physics",
+            "Chemistry",
+            "Biology",
+            "Information Technology (IT)",
+            "Agriculture"
+        ]
+    },
+    "Social Science": {
+        "emoji": "📜",
+        "name": "Social Science",
+        "subjects": [
+            "English",
+            "Mathematics (Social Science)",
+            "History",
+            "Geography",
+            "Economics",
+            "Citizenship Education",
+            "Information Technology (IT)"
+        ]
+    }
+}
+
+GRADE_5_6_SUBJECTS = [
+    "English",
+    "Mathematics",
+    "Environmental Science",
+    "Social Studies",
+    "Moral and Citizenship Education",
+    "Performing and Visual Arts (PVA)",
+    "Health and Physical Education (HPE)",
+    "National/Regional Language"
+]
+
+GRADE_7_8_SUBJECTS = [
+    "English",
+    "Mathematics",
+    "General Science",
+    "Social Studies",
+    "Citizenship Education",
+    "Career and Technical Education (CTE)",
+    "Performing and Visual Arts (PVA)",
+    "Health and Physical Education (HPE)",
+    "Information Technology (IT)",
+    "National/Regional Language"
+]
+
+GRADE_9_10_SUBJECTS = [
+    "English",
+    "Mathematics",
+    "Physics",
+    "Chemistry",
+    "Biology",
+    "History",
+    "Geography",
+    "Economics",
+    "Citizenship Education",
+    "Information Technology (IT)",
+    "Health and Physical Education (HPE)",
+    "National/Regional Language"
+]
+
+EXAM_BUNDLE_GRADES = {
+    "6": ["5", "6"],
+    "8": ["7", "8"],
+    "12": ["9", "10", "11", "12"]
+}
+
+def get_exam_review_grades(grade: Optional[str]) -> List[str]:
+    grade_str = str(grade).strip() if grade else ""
+    return EXAM_BUNDLE_GRADES.get(grade_str, [grade_str] if grade_str else ["10"])
+
+def get_curriculum_subjects(grade: Optional[str] = None, stream: Optional[str] = None) -> List[str]:
+    if stream and stream in STREAMS:
+        return STREAMS[stream]["subjects"]
+    grade_str = str(grade).strip() if grade else ""
+    if grade_str in ["11", "12"]:
+        return STREAMS["Natural Science"]["subjects"]
+    elif grade_str in ["9", "10"]:
+        return GRADE_9_10_SUBJECTS
+    elif grade_str in ["7", "8"]:
+        return GRADE_7_8_SUBJECTS
+    elif grade_str in ["5", "6"]:
+        return GRADE_5_6_SUBJECTS
+    elif grade_str in ["1", "2", "3", "4"]:
+        return GRADE_5_6_SUBJECTS
+    else:
+        return GRADE_9_10_SUBJECTS
 
 def validate_environment() -> None:
     """Validates that all required environment variables and secrets are populated before startup."""

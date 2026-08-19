@@ -1,12 +1,12 @@
 import asyncio
 from datetime import datetime
+# pyrefly: ignore [missing-import]
 from bot.database.db import get_db_connection
 from bot.database.models import MessageModel
 
 def _get_history_sync(user_id: int, limit: int) -> list[MessageModel]:
     conn = get_db_connection()
     cursor = conn.cursor()
-    # Sort descending to get the latest `limit` messages, then sort ascending to get chronological order.
     cursor.execute("""
         SELECT role, message, created_at, id, telegram_user_id
         FROM (
@@ -26,7 +26,6 @@ def _get_history_sync(user_id: int, limit: int) -> list[MessageModel]:
         created_at_val = row['created_at']
         if isinstance(created_at_val, str):
             try:
-                # SQLite datetimes sometimes end in Z or have different offsets
                 created_at_val = datetime.fromisoformat(created_at_val.replace('Z', '+00:00'))
             except ValueError:
                 created_at_val = datetime.now()
@@ -42,7 +41,6 @@ def _get_history_sync(user_id: int, limit: int) -> list[MessageModel]:
     return history
 
 async def get_history(user_id: int, limit: int = 20) -> list[MessageModel]:
-    """Retrieves the last `limit` messages for a student in chronological order."""
     return await asyncio.to_thread(_get_history_sync, user_id, limit)
 
 def _add_message_sync(user_id: int, role: str, message: str) -> None:
@@ -56,7 +54,6 @@ def _add_message_sync(user_id: int, role: str, message: str) -> None:
     conn.close()
 
 async def add_message(user_id: int, role: str, message: str) -> None:
-    """Saves a message to the student's conversation history."""
     await asyncio.to_thread(_add_message_sync, user_id, role, message)
 
 def _clear_history_sync(user_id: int) -> None:
@@ -69,5 +66,4 @@ def _clear_history_sync(user_id: int) -> None:
     conn.close()
 
 async def clear_history(user_id: int) -> None:
-    """Deletes all messages for a student."""
     await asyncio.to_thread(_clear_history_sync, user_id)

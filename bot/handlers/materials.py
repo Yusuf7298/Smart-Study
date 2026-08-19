@@ -12,7 +12,6 @@ from bot.utils import safe_reply, safe_edit
 router = Router()
 
 def get_materials_keyboard(materials, lang: str = "English") -> InlineKeyboardMarkup:
-    """Builds inline keyboard for materials library with Study and Delete buttons per item."""
     inline_keyboard = []
     for mat in materials:
         title_snippet = (mat.title or mat.filename)[:20]
@@ -35,7 +34,6 @@ def get_materials_keyboard(materials, lang: str = "English") -> InlineKeyboardMa
 @router.message(Command("materials"), StateFilter(None))
 @router.message(F.text.in_(["📎 My Materials", "📎 የእኔ ማቴሪያሎች", "📎 Meeshaalee Koo"]), StateFilter(None))
 async def show_materials_command(message: Message, state: FSMContext):
-    """Displays the student's study materials library."""
     await state.clear()
     telegram_id = message.from_user.id if message.from_user else None
     if not telegram_id:
@@ -64,7 +62,6 @@ async def show_materials_command(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "menu_materials")
 async def materials_menu_callback(callback: CallbackQuery, state: FSMContext):
-    """Handles main menu My Materials callback."""
     await state.clear()
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
@@ -92,7 +89,6 @@ async def materials_menu_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("mat_study_"))
 async def study_material_callback(callback: CallbackQuery, state: FSMContext):
-    """Activates selected study material and presents PDF Study options."""
     telegram_id = callback.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
@@ -144,8 +140,6 @@ async def delete_material_callback(callback: CallbackQuery, state: FSMContext):
         return
         
     await callback.answer(t("materials_deleted", lang), show_alert=True)
-    
-    # Refresh list
     materials = await pdf_service.get_student_materials(telegram_id)
     if not materials:
         kb = InlineKeyboardMarkup(inline_keyboard=[[

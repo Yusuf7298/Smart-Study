@@ -1,3 +1,4 @@
+import logging
 from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
 import config
@@ -6,65 +7,54 @@ from bot.services.i18n import t
 
 class ApprovalMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
-        # Retrieve user and state
         user = data.get("event_from_user")
         if not user:
             return await handler(event, data)
             
         telegram_id = user.id
-        
-        # Check FSM state to see if they are currently registering
         state = data.get("state")
         current_state = await state.get_state() if state else None
-        
-        # Determine if they are currently in the registration FSM flow
         is_registering = isinstance(current_state, str) and current_state.startswith("RegistrationStates:")
-        
-        # Check if user is an admin
         is_admin = telegram_id in config.ADMIN_IDS
         
-        # If it's a message, check if it's the start command, admin command, or part of registration FSM
-        if hasattr(event, "text"):
-            command = event.text or ""
-            if command.startswith("/start") or is_registering:
+        if isinstance(event, Message):
+            command = event.text or event.caption or ""
+            if command.startswith(("/start", "/help", "/support", "/contact", "/socials")) or is_registering:
                 return await handler(event, data)
-            if is_admin and (command.startswith("/admin") or command.startswith("/broadcast")):
+            if is_admin and command.startswith(("/admin", "/broadcast")):
                 return await handler(event, data)
-        elif hasattr(event, "message"):
-            # Allow registration callbacks and admin callbacks
+        elif isinstance(event, CallbackQuery):
             callback_data = event.data or ""
-            if is_registering or callback_data.startswith("reg_"):
+            if is_registering or callback_data.startswith(("reg_", "menu_support", "menu_language", "menu_socials", "menu_help")):
                 return await handler(event, data)
             if is_admin and callback_data.startswith("admin_"):
                 return await handler(event, data)
-                
-        # Fetch student from database
         student = await student_service.get_student(telegram_id)
+        is_cb = hasattr(event, "data") and isinstance(getattr(event, "data"), str)
         if not student:
-            # Not registered yet
-            if hasattr(event, "text"):
-                await event.answer(
-                    "Welcome to Smart Study Bot! Please send /start to register and begin learning."
-                )
-            elif hasattr(event, "message"):
+            welcome_unreg = "Welcome to Ethio Smart Study Bot! Please send /start to register and begin learning."
+            if is_cb:
                 await event.answer("Please register first by sending /start.", show_alert=True)
+            elif hasattr(event, "answer"):
+                await event.answer(welcome_unreg)
             return
             
         lang = student.preferred_language or "English"
         
-        # Check approval status
-        if student.approval_status == 'PENDING':
-            if hasattr(event, "text"):
-                await event.answer(t("reg_pending_wait", lang), parse_mode="Markdown")
-            elif hasattr(event, "message"):
-                await event.answer("⏳ Your registration is pending approval.", show_alert=True)
-            return
-        elif student.approval_status == 'REJECTED':
-            if hasattr(event, "text"):
-                await event.answer(t("reg_rejected", lang), parse_mode="Markdown")
-            elif hasattr(event, "message"):
-                await event.answer("❌ Your registration was rejected.", show_alert=True)
-            return
-            
-        # Approved user - continue handling event
+        if student.approval_status != 'APPROVED':
+            if student.approval_status == 'REJECTED':
+                reason = student.rejected_reason or "Payment unverified"
+                reject_msg = t("reg_rejected_with_retry", lang, reason=reason)
+                if is_cb:
+                    await event.answer("❌ Your registration was rejected. Send /start to retry.", show_alert=True)
+                elif hasattr(event, "answer"):
+                    await event.answer(reject_msg, parse_mode="HTML")
+                return
+            else:
+                wait_msg = t("reg_pending_wait", lang)
+                if is_cb:
+                    await event.answer("⏳ Your registration is waiting for admin approval.", show_alert=True)
+                elif hasattr(event, "answer"):
+                    await event.answer(wait_msg, parse_mode="HTML")
+                return
         return await handler(event, data)

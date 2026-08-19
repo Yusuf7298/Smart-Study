@@ -18,16 +18,11 @@ CHUNK_SIZE_CHARS = 4000
 CHUNK_OVERLAP_CHARS = 400
 
 def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> Tuple[str, int, str, Optional[str]]:
-    """
-    Extracts text, page count, and extraction status from raw PDF bytes.
-    Returns (extracted_text, page_count, status, error_message).
-    """
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes))
         
         if reader.is_encrypted:
             try:
-                # Try empty password
                 reader.decrypt("")
             except Exception:
                 return "", 0, "ENCRYPTED", "Password-protected PDF files cannot be processed."
@@ -57,7 +52,6 @@ def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> Tuple[str, int, str, Option
         return "", 0, "FAILED", f"Extraction error: {str(e)}"
 
 def chunk_pdf_text(text: str, chunk_size: int = CHUNK_SIZE_CHARS, overlap: int = CHUNK_OVERLAP_CHARS) -> List[str]:
-    """Splits large document text into overlapping segments."""
     if len(text) <= chunk_size:
         return [text]
     chunks = []
@@ -71,7 +65,6 @@ def chunk_pdf_text(text: str, chunk_size: int = CHUNK_SIZE_CHARS, overlap: int =
     return chunks
 
 def retrieve_relevant_chunks(chunks: List[str], query: str, top_k: int = 3) -> str:
-    """Keyword-based ranking retrieval for query context against chunks."""
     if len(chunks) <= 1:
         return chunks[0] if chunks else ""
     query_words = set(re_word for re_word in query.lower().split() if len(re_word) > 2)
@@ -95,27 +88,42 @@ async def process_and_save_pdf(
     file_id: Optional[str] = None,
     student: Optional[StudentModel] = None
 ) -> StudyMaterialModel:
-    """
-    Saves PDF file using StorageProvider, extracts text, generates topics & summary, and creates DB record.
-    """
-    # 1. Validate file size
     size_mb = len(pdf_bytes) / (1024 * 1024)
     if size_mb > config.MAX_FILE_SIZE_MB:
         raise ValueError(f"File exceeds maximum allowed size of {config.MAX_FILE_SIZE_MB}MB.")
         
-    # 2. Extract text and validate PDF integrity
     extracted_text, page_count, status, error_msg = await asyncio.to_thread(extract_text_from_pdf_bytes, pdf_bytes)
     
-    # 3. Save to storage
     disk_path, safe_name = await default_storage.save_file(telegram_id, original_filename, pdf_bytes)
         
-    # 4. Handle text analysis and summaries
     if status == "SUCCESS" and extracted_text and student:
-        # Use first 20k chars for summary to avoid huge prompt payloads
         summary_source = extracted_text[:20000]
-        title, topics, summary = await gemini_service.extract_pdf_topics_and_summary(
+        title, detected_subject, detected_grade, topics, summary = await gemini_service.extract_pdf_topics_and_summary(
             summary_source, safe_name, student
         )
+        
+        if student.selected_courses and detected_subject and detected_subject.strip().lower() != "general":
+            from bot.services.student_service import is_course_registered
+            if not is_course_registered(student, detected_subject):
+                await default_storage.delete_file(disk_path)
+                enrolled_str = ", ".join(student.selected_courses)
+                raise ValueError(
+                    f"⛔ Security Alert: Unauthorized Course!\n━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"This document is identified as {detected_subject}, but you are only enrolled in:\n"
+                    f"📚 {enrolled_str}\n\n"
+                    f"You cannot upload or study materials for courses you have not enrolled in. To add {detected_subject}, please contact support (@Cs1At07)."
+                )
+                
+        if student.grade and detected_grade:
+            from bot.services.student_service import is_grade_matching
+            if not is_grade_matching(student, detected_grade):
+                # Clean up uploaded file
+                await default_storage.delete_file(disk_path)
+                raise ValueError(
+                    f"⛔ Security Alert: Grade Level Mismatch!\n━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"This textbook appears to be for {detected_grade}, but your registered profile is Grade {student.grade}.\n\n"
+                    f"Students are only permitted to study textbooks matching their registered grade."
+                )
     elif status == "SCANNED":
         title = safe_name
         topics = ["Scanned Document"]
@@ -130,7 +138,6 @@ async def process_and_save_pdf(
             
     topics_json = json.dumps(topics)
     
-    # 5. Persist to database
     material = await asyncio.to_thread(
         mat_repo.save_study_material,
         telegram_id=telegram_id,
@@ -150,26 +157,20 @@ async def process_and_save_pdf(
     return material
 
 async def get_active_material(telegram_id: int) -> Optional[StudyMaterialModel]:
-    """Retrieves student's active study material."""
     return await asyncio.to_thread(mat_repo.get_active_study_material, telegram_id)
 
 async def get_student_materials(telegram_id: int, limit: int = 20) -> List[StudyMaterialModel]:
-    """Retrieves all non-deleted study materials uploaded by student."""
     return await asyncio.to_thread(mat_repo.get_all_student_materials, telegram_id, limit)
 
 async def activate_student_material(telegram_id: int, material_id: int) -> bool:
-    """Sets a specific material as active for the student."""
     return await asyncio.to_thread(mat_repo.set_active_material, telegram_id, material_id)
 
 async def delete_student_material(telegram_id: int, material_id: int) -> bool:
-    """Deletes material from database and deletes physical file from storage."""
     material = await asyncio.to_thread(mat_repo.get_study_material_by_id, material_id)
     if not material or material.telegram_id != telegram_id:
         return False
         
-    # Delete from DB
     db_deleted = await asyncio.to_thread(mat_repo.delete_study_material, telegram_id, material_id)
-    # Delete from physical storage
     if material.file_path:
         await default_storage.delete_file(material.file_path)
     return db_deleted
@@ -180,14 +181,11 @@ async def ask_pdf_question(
     student: StudentModel,
     material: Optional[StudyMaterialModel] = None
 ) -> str:
-    """Grounded question answering against the active or specified PDF document with chunking support."""
     target_mat = material or await get_active_material(telegram_id)
     if not target_mat or not target_mat.extracted_text:
         return "No active PDF document found. Please upload a PDF using /pdf first."
         
     full_text = target_mat.extracted_text
-    
-    # If text is very large, retrieve relevant chunks
     if len(full_text) > MAX_DIRECT_TEXT_CHARS:
         chunks = chunk_pdf_text(full_text)
         relevant_text = retrieve_relevant_chunks(chunks, question, top_k=4)

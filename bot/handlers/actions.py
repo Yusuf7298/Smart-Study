@@ -25,7 +25,6 @@ class ActionStates(StatesGroup):
 @router.message(Command("test"), StateFilter(None))
 @router.message(F.text.in_(["📝 Written Test", "📝 የጽሁፍ ፈተና", "📝 Qormaata Barreeffamaa"]), StateFilter(None))
 async def test_start(message: Message, state: FSMContext, telegram_id: Optional[int] = None):
-    """Starts the written test flow."""
     tid = telegram_id or (message.from_user.id if message.from_user else None)
     if not tid:
         return
@@ -38,11 +37,12 @@ async def test_start(message: Message, state: FSMContext, telegram_id: Optional[
     lang = student.preferred_language or "English"
     learning_session = await learning_service.get_active_session(tid)
     if not learning_session:
+        registered_courses = student.selected_courses if student else []
+        from bot.handlers.study import get_registered_subjects_keyboard
         await safe_reply(
             message,
-            "📚 You don't have an active study topic.\n\n"
-            "Start one first with:\n\n"
-            "/study"
+            "📚 Please choose one of your registered subjects to take a written test:",
+            reply_markup=get_registered_subjects_keyboard(registered_courses, lang)
         )
         return
         
@@ -86,7 +86,7 @@ async def test_start(message: Message, state: FSMContext, telegram_id: Optional[
         
         await safe_edit(
             thinking,
-            f"📝 *Written Test: {learning_session.topic}*\n"
+            f"📝 Written Test: {learning_session.topic}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"{test_content.strip()}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -100,7 +100,6 @@ async def test_start(message: Message, state: FSMContext, telegram_id: Optional[
 @router.callback_query(F.data == "action_test", StateFilter(None))
 @router.callback_query(F.data == "menu_test", StateFilter(None))
 async def action_test_callback(callback: CallbackQuery, state: FSMContext):
-    """Processes the test callback button."""
     try:
         await callback.answer()
     except Exception:
@@ -127,7 +126,6 @@ async def process_test_answer(message: Message, state: FSMContext):
     thinking = await message.answer(t("test_evaluating", lang))
     
     try:
-        # Grade test with structured response
         score, letter_grade, strengths, weaknesses, corrections, recommendations, feedback = (
             await gemini_service.grade_written_test(
                 questions_text=questions,
@@ -138,7 +136,6 @@ async def process_test_answer(message: Message, state: FSMContext):
             )
         )
         
-        # Save to test_results table
         await asyncio.to_thread(
             test_repo.save_test_result,
             telegram_id=telegram_id,
@@ -153,7 +150,6 @@ async def process_test_answer(message: Message, state: FSMContext):
             learning_session_id=session_id
         )
         
-        # Save to conversation history
         await conversation_service.add_message(telegram_id, "user", f"[Test Answers]: {message.text}")
         await conversation_service.add_message(telegram_id, "assistant", f"[Test Grading]: {feedback}")
         
@@ -175,7 +171,6 @@ async def process_test_answer(message: Message, state: FSMContext):
 @router.message(Command("short_note"), StateFilter(None))
 @router.message(F.text.in_(["📖 Short Notes", "📖 አጫጭር ማስታወሻዎች", "📖 Yaadannoo Gabaabaa"]), StateFilter(None))
 async def short_note_start(message: Message, telegram_id: Optional[int] = None):
-    """Generates a concise study guide summary."""
     tid = telegram_id or (message.from_user.id if message.from_user else None)
     if not tid:
         return
@@ -188,25 +183,34 @@ async def short_note_start(message: Message, telegram_id: Optional[int] = None):
     lang = student.preferred_language or "English"
     learning_session = await learning_service.get_active_session(tid)
     if not learning_session:
+        registered_courses = student.selected_courses if student else []
+        from bot.handlers.study import get_registered_subjects_keyboard
         await safe_reply(
             message,
-            "📚 You don't have an active study topic.\n\n"
-            "Start one first with:\n\n"
-            "/study"
+            "📚 Please choose one of your registered subjects to generate short notes:",
+            reply_markup=get_registered_subjects_keyboard(registered_courses, lang)
         )
         return
         
     thinking = await message.answer(t("notes_generating", lang))
     
     try:
+        grade_str = str(student.grade) if student.grade is not None else "12"
         prompt = (
-            f"Write a concise revision short notes summary in {lang} for a Grade {student.grade} student on:\n"
-            f"Topic: '{learning_session.topic}' (Subject: '{learning_session.subject}').\n\n"
+            f"You are the master Ethiopian teacher writing comprehensive, memory-first revision short notes in {lang} for a Grade {grade_str} student.\n"
+            f"Subject: '{learning_session.subject}'\n"
+            f"Topic: '{learning_session.topic}'\n\n"
             f"STRICT RULES:\n"
-            f"- DO NOT write any intro greeting (e.g., 'Welcome', 'Here are your notes').\n"
-            f"- DO NOT write any outro text (e.g., 'Good luck studying', 'Hope this helps').\n"
-            f"- Provide ONLY high-yield bullet points, core definitions, key formulas, and crucial exam facts.\n"
-            f"- Use clean Markdown with bold keywords."
+            f"- DO NOT write any intro greetings or pleasantries.\n"
+            f"- DO NOT write any outro remarks or filler.\n"
+            f"- Organize the notes with standard educational anchors:\n"
+            f"  • 📌 Core Definition & Mechanism: Clear, precise definition and working principles.\n"
+            f"  • 💡 Simple Idea: Intuitive real-world explanation.\n"
+            f"  • 🧠 Memory Trick / Key Anchor: Mnemonic, formula, or mental hook.\n"
+            f"  • 🔎 Key Equations & Step-by-Step Examples: Formulas, reaction mechanisms, or worked steps.\n"
+            f"  • ⚠️ Common Mistakes: Tricky traps or exam misconceptions.\n"
+            f"  • 🎯 High-Yield Exam Takeaways: Must-know facts for examinations.\n"
+            f"- Use clean Markdown with bold keywords and structured bullet points."
         )
         history = await conversation_service.get_history(tid)
         types_history = [
@@ -284,7 +288,6 @@ async def action_personalize_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "menu_language", StateFilter(None))
 async def menu_language_callback(callback: CallbackQuery):
-    """Directly opens language switcher from main menu."""
     try:
         await callback.answer()
     except Exception:
@@ -293,13 +296,30 @@ async def menu_language_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "change_grade")
 async def change_grade_callback(callback: CallbackQuery):
-    """Displays grade selection keyboard for personalization."""
     try:
         await callback.answer()
     except Exception:
         pass
+    telegram_id = callback.from_user.id
+    student = await student_service.get_student(telegram_id)
+    if student and student.approval_status == 'APPROVED':
+        support_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📞 Contact Support (@Cs1At07)", url="https://t.me/Cs1At07")],
+            [InlineKeyboardButton(text="🔙 Back to Personalize", callback_data="action_personalize")]
+        ])
+        await safe_edit(
+            callback.message,
+            "🔒 Grade Level & Courses Locked\n━━━━━━━━━━━━━━━━━━━━\n"
+            "Your registered grade is locked for security and curriculum consistency.\n\n"
+            "To request a grade or course change, please contact support:\n"
+            "• 💬 Telegram: [@Cs1At07](https://t.me/Cs1At07)\n"
+            "• 📱 Phone: `0928892344`",
+            reply_markup=support_kb
+        )
+        return
+        
     await safe_edit(
-        callback.message, # type: ignore
+        callback.message,
         "🎓 Select your new grade level:",
         reply_markup=get_grades_keyboard()
     )
@@ -355,3 +375,15 @@ async def test_history_start(message: Message, telegram_id: Optional[int] = None
     )
 
 test_history_command = test_history_start
+
+@router.callback_query(F.data == "menu_back")
+async def menu_back_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    telegram_id = callback.from_user.id
+    from bot.handlers.start import send_student_dashboard
+    await state.clear()
+    await send_student_dashboard(callback, telegram_id)
+

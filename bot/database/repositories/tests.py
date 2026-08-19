@@ -16,7 +16,6 @@ def save_test_result(
     feedback: str = "",
     learning_session_id: Optional[int] = None
 ) -> TestResultModel:
-    """Saves a completed written test evaluation into the database."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -35,7 +34,6 @@ def save_test_result(
     return get_test_result_by_id(test_id)
 
 def get_test_result_by_id(test_id: int) -> Optional[TestResultModel]:
-    """Retrieves a single test result record by its ID."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -51,7 +49,6 @@ def get_test_result_by_id(test_id: int) -> Optional[TestResultModel]:
     return _row_to_test(row)
 
 def get_student_test_results(telegram_id: int, limit: int = 10) -> List[TestResultModel]:
-    """Retrieves past test results for a student in descending order."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -67,7 +64,6 @@ def get_student_test_results(telegram_id: int, limit: int = 10) -> List[TestResu
     return [_row_to_test(r) for r in rows]
 
 def get_student_test_stats(telegram_id: int) -> Dict[str, Any]:
-    """Calculates overall test metrics for a student."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""

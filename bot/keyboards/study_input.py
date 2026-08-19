@@ -1,7 +1,24 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+def get_study_methods_keyboard(subject: str, lang: str = "English") -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton(text="✍️ 1. Topic / Short Description", callback_data=f"study_method_topic_{subject}")
+        ],
+        [
+            InlineKeyboardButton(text="📸 2. Photo / Screenshot Upload", callback_data=f"study_method_photo_{subject}")
+        ],
+        [
+            InlineKeyboardButton(text="📄 3. File / PDF Upload", callback_data=f"study_method_file_{subject}")
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Back to Subjects", callback_data="study_back_subjects"),
+            InlineKeyboardButton(text="❌ Cancel", callback_data="study_cancel")
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
 def get_study_input_keyboard() -> InlineKeyboardMarkup:
-    """Returns an inline keyboard to choose how the student wants to provide study materials."""
     keyboard = [
         [
             InlineKeyboardButton(text="📎 Upload File + Description", callback_data="study_input_file")
@@ -13,7 +30,6 @@ def get_study_input_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_study_actions_keyboard() -> InlineKeyboardMarkup:
-    """Returns the persistent learning actions panel attached to lessons and chat responses."""
     keyboard = [
         [
             InlineKeyboardButton(text="❓ Quiz", callback_data="action_quiz"),

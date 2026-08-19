@@ -21,11 +21,14 @@ from bot.handlers.admin import router as admin_router
 from bot.handlers.actions import router as actions_router
 from bot.handlers.progress import router as progress_router
 from bot.handlers.materials import router as materials_router
+from bot.handlers.study_tips import router as study_tips_router
+from bot.handlers.exam import router as exam_router
+from bot.handlers.feedback import router as feedback_router
 from bot.handlers.chat import router as chat_router
 
 from bot.middlewares.approval import ApprovalMiddleware
 from bot.middlewares.ratelimit import RateLimitMiddleware
-from bot.database.database import init_db
+from bot.database.database import init_database, init_db
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,31 +58,19 @@ async def global_error_handler(event: ErrorEvent) -> bool:
         return True
 
 async def main():
-    # 1. Validate environment configuration
     try:
         validate_environment()
     except ValueError as ve:
         logging.warning(f"Environment validation note: {ve}")
-        
-    # 2. Initialize database schema & migrations
-    init_db()
-    
+    await init_database()
     bot = Bot(token=BOT_TOKEN) # type: ignore
-
     dp = Dispatcher()
-    
-    # 3. Global Error Handler
     dp.error.register(global_error_handler)
-    
-    # 4. Rate Limiting Middleware
     dp.message.middleware(RateLimitMiddleware())
     dp.callback_query.middleware(RateLimitMiddleware())
-    
-    # 5. Approval & Access Control Middleware
     dp.message.middleware(ApprovalMiddleware())
     dp.callback_query.middleware(ApprovalMiddleware())
 
-    # 6. Register Routers in logical priority order
     dp.include_router(start_router)
     dp.include_router(registration_router)
     dp.include_router(admin_router)
@@ -89,17 +80,18 @@ async def main():
     dp.include_router(pdf_router)
     dp.include_router(materials_router)
     dp.include_router(quiz_router)
+    dp.include_router(exam_router)
+    dp.include_router(feedback_router)
     dp.include_router(actions_router)
+    dp.include_router(study_tips_router)
     dp.include_router(chat_router)
-
-    # 7. Resilient Polling Loop (auto-reconnects on network drops)
     while True:
         try:
-            logging.info("Starting Smart Study Bot polling...")
+            logging.info("Starting Ethio Smart Study Bot polling...")
             await dp.start_polling(bot, handle_signals=True, polling_timeout=30)
             break
         except (KeyboardInterrupt, SystemExit):
-            logging.info("Smart Study Bot stopped gracefully.")
+            logging.info("Ethio Smart Study Bot stopped gracefully.")
             break
         except Exception as e:
             logging.warning(f"Network / connection blip encountered ({e}). Reconnecting in 3s...")
@@ -109,4 +101,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logging.info("Smart Study Bot process terminated.")
+        logging.info("Ethio Smart Study Bot process terminated.")

@@ -4,14 +4,8 @@ from collections import defaultdict
 from typing import Dict, List
 from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
-
 import config
-
 class RateLimitMiddleware(BaseMiddleware):
-    """
-    Sliding window in-memory rate limiting middleware per Telegram user.
-    Prevents abuse and quota exhaustion.
-    """
     def __init__(self, limit: int = config.RATE_LIMIT_REQUESTS, window: int = config.RATE_LIMIT_WINDOW_SECONDS):
         self.limit = limit
         self.window = window
@@ -24,15 +18,11 @@ class RateLimitMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         telegram_id = user.id
-        
-        # Bypass rate limits for administrators
         if telegram_id in config.ADMIN_IDS:
             return await handler(event, data)
 
         now = time.time()
         timestamps = self.user_timestamps[telegram_id]
-
-        # Purge timestamps older than window
         self.user_timestamps[telegram_id] = [ts for ts in timestamps if now - ts < self.window]
 
         if len(self.user_timestamps[telegram_id]) >= self.limit:

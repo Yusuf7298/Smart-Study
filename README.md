@@ -1,214 +1,207 @@
-# 🎓 Smart Study Bot — Production-Ready AI Telegram Tutor
+# 🎓 Ethio Smart Study Bot — Production Learning Platform
 
-Smart Study Bot is an intelligent, multilingual Telegram AI tutoring platform built with **Python**, **aiogram 3**, **Google Gemini GenAI SDK**, and **SQLite**. It offers structured tutoring, grounded PDF study, adaptive multiple-choice quizzes, written conceptual tests with AI grading, study materials management, and a comprehensive administrative dashboard.
-
----
-
-## 🌟 Key Features
-
-### 1. 🌐 Centralized Multilingual System (i18n)
-- Native language support for:
-  - 🇬🇧 **English** (`en`)
-  - 🇪🇹 **አማርኛ / Amharic** (`am`)
-  - 🟢 **Afaan Oromoo** (`om`)
-- Controls menus, buttons, registration, approval alerts, study prompts, quiz cards, test grading, notes, progress, and PDF Q&A.
-
-### 2. 🔐 Student Registration & Admin Approval Lifecycle
-- `/start` triggers an interactive registration FSM:
-  - Full Name → Grade (Grade 5 to University) → Preferred Language → Confirmation Summary → `PENDING`
-- Administrators receive an instant approval card with one-tap `Approve` or `Reject` buttons.
-- `ApprovalMiddleware` blocks unapproved/pending students from learning features while maintaining friendly guidance.
-
-### 3. 🛡️ Administrator Control Center (`/admin`)
-- Real-time dashboard showing total registered, approved, pending, and rejected students, alongside counters for lessons, quizzes, tests, and PDFs.
-- **One-Tap Actions**:
-  - `⏳ Pending`: Review and approve/reject applications.
-  - `👥 Approved List`: View recent approved students.
-  - `❌ Rejected List`: View rejected records with re-approval option.
-  - `🔍 Student Search`: `/admin_search <name or ID>`
-  - `📢 Broadcast`: `/broadcast <message>` to send paced announcements to all approved students.
-
-### 4. 📚 Structured Study Mode (`/study`)
-- Covers **Computer Science** (Python, JavaScript, HTML, CSS, C++, Java, Next.js), **Mathematics**, **Physics**, **Biology**, **Chemistry**, **Geography**, **English**, and **School Subjects**.
-- Socratic teaching method: explains concepts, gives real-world examples, checks student understanding, and adapts dynamically to grade level.
-- Multi-modal support: Provide study requirements via text or upload photos/documents.
-
-### 5. 📄 PDF Study & Document Library (`/pdf`, `/materials`)
-- **Document Processing**: Pure-Python `pypdf` extraction, size limits (<=20MB), path-traversal sanitization, and isolated user upload storage.
-- **AI Document Analysis**: Extracts key topics and creates high-yield summaries on upload.
-- **Grounded Q&A**: Answers questions grounded strictly in document text with intelligent chunking for large documents.
-- **Study Materials Library (`/materials`)**: View, activate, and delete uploaded study materials.
-
-### 6. 🧠 Interactive MCQ Quiz & 📝 Written Test
-- **Quiz (`/quiz`)**: 5 adaptive questions with instant answer explanations, double-answer lockout, and progress tracking.
-- **Written Test (`/test`)**: 3 conceptual questions evaluated by AI for score (0–10), letter grade (A+ to F), strengths, weaknesses, and corrections. Past results accessible via `/test_history`.
-
-### 7. 📊 Learning Progress Dashboard (`/progress`)
-- Live academic metrics aggregated from SQLite: lessons started, quiz counts, quiz average %, written test average score, PDFs uploaded, and active topic.
-
-### 8. 🚦 Abuse Protection & Security
-- `RateLimitMiddleware` enforces a per-user sliding window limit (20 requests / 60 seconds) with admin bypass.
-- Path traversal prevention, safe parameter binding for all SQL queries, and zero hardcoded secrets.
+**Ethio Smart Study** is an AI-powered personalized educational and exam preparation platform on Telegram built with **Python 3.10+**, **aiogram 3**, **MongoDB Atlas**, and **Google Gemini API**. It provides step-by-step curriculum teaching, grounded PDF exam preparation, adaptive quizzes, written tests, and student progress tracking for Ethiopian students from Grade 1 to University in **English**, **Amharic (አማርኛ)**, and **Afaan Oromoo**.
 
 ---
 
-## 🛠️ Project Structure
+## 🌟 System Architecture
 
-```text
-├── bot/
-│   ├── database/
-│   │   ├── database.py           # SQLite initialization, schema, migrations
-│   │   ├── models.py             # Dataclass models
-│   │   └── repositories/         # Modular DB repositories (student, admin, materials, tests, quiz, learning, conv)
-│   ├── handlers/
-│   │   ├── start.py              # /start, /menu, /help, main dashboard
-│   │   ├── registration.py       # Registration FSM & Admin alerts
-│   │   ├── admin.py              # /admin, approval/rejection, search, broadcast
-│   │   ├── profile.py            # /profile, grade & language switcher
-│   │   ├── study.py              # /study, /current, topic selection
-│   │   ├── pdf.py                # /pdf, grounded Q&A, PDF quiz/test
-│   │   ├── materials.py          # /materials, material library & management
-│   │   ├── quiz.py               # /quiz, adaptive MCQ flow
-│   │   ├── actions.py            # /test, /test_history, /short_note, /personalize
-│   │   ├── progress.py           # /progress academic dashboard
-│   │   └── chat.py               # AI Tutor chat, /newchat, /clearchat, /cancel
-│   ├── keyboards/                # Localized inline & reply keyboards
-│   ├── middlewares/
-│   │   ├── approval.py           # Registration & access control gatekeeper
-│   │   └── ratelimit.py          # Sliding window rate limiter
-│   └── services/
-│       ├── gemini.py             # Google GenAI integration, fallback models, structured responses
-│       ├── i18n.py               # Centralized 3-language translation dictionary
-│       ├── pdf_service.py        # PDF extraction, chunking, retrieval
-│       ├── storage.py            # StorageProvider abstraction (LocalStorageProvider)
-│       └── progress_service.py   # Live analytics aggregator
-├── data/
-│   └── uploads/                  # User-isolated document storage
-├── tests/
-│   ├── test_tutor.py             # Core tutor and handler unit tests
-│   └── test_production.py        # Comprehensive production integration tests
-├── config.py                     # Environment variables, constants, subjects config
-├── main.py                       # Application entrypoint & router dispatcher
-├── requirements.txt              # Production dependencies
-├── PRODUCTION_CHECKLIST.md       # Audit checklist & verification matrix
-└── README.md
+```
+🎓 ETHIO SMART STUDY BOT
+        │
+   Telegram Bot (aiogram 3)
+        │
+ ┌──────┼───────────────┐
+ │      │               │
+ ▼      ▼               ▼
+MongoDB Atlas       Gemini API       File Storage Provider
+────────────        ──────────       ─────────────────────
+Students            Study content    PDFs (user-isolated)
+Courses             Lesson gen       Payment receipts
+Chapters            10 MCQs          Path traversal guard
+Payments            Test grading     Size limits (20MB)
+Pricing             Translations
+Progress            Explanations
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Key Platform Features
 
-### 1. Prerequisites
-- Python 3.10+ (tested on Python 3.14)
-- Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
-- Google Gemini API Key (from [Google AI Studio](https://aistudio.google.com/))
+### 1. Student Registration & Onboarding (`/start`)
+- **Profile Capture**: Full Name, Phone Number (via Telegram Contact button or text input), Grade Level (1–12, College, University), and Preferred Language (**English**, **አማርኛ**, **Afaan Oromoo**).
+- **Interactive Multi-Subject Picker**: Select multiple courses with dynamic inline checkbox buttons (`[✅ Biology]`, `[⬜ Physics]`, `[➡️ Continue (1 selected)]`).
+- **Automated Fee Calculation**: Automatically calculates `Total = Enrolled Courses × Price ETB`.
 
-### 2. Installation
+### 2. Dynamic Pricing & Course Payments
+- **Dynamic Pricing**: Configurable by administrators anytime in MongoDB Atlas via `/admin_pricing` (Default: `50 ETB` per course).
+- **Payment Credentials**:
+  - **Account Owner**: `Yusuf Mohammed`
+  - **Commercial Bank of Ethiopia (CBE)**: `1000359254718`
+  - **Telebirr**: `0928892344`
+- **Receipt Screenshot Verification**: Students upload payment receipt photos. The bot securely saves receipts and forwards them to all `ADMIN_IDS` with instant `[✅ Approve]` and `[❌ Reject]` buttons.
+
+### 3. Server-Side Access Control & Gating
+- Strict middleware restricts paid learning features until the administrator verifies payment and sets status to `APPROVED`.
+- `/study` and `/menu` present **only enrolled and paid courses**.
+
+### 4. 📄 PDF Final Exam Study Mode (`/pdf`)
+- Upload lecture slides or textbook chapters.
+- **Source-Only Grounding**: The internal tutoring instruction ensures learning is grounded *strictly* in the uploaded material without outside hallucinations:
+  > *"Let's study together, starting from Chapter {chapter_number} in {file_name}. I am studying for my final exam. We will study step by step... Follow ONLY the attached study material..."*
+- **6-Step Study Cycle**:
+  1. **Short Notes**: High-yield definitions, concepts, and formulas.
+  2. **10 Grounded MCQs**: Generated strictly from the text with A, B, C, D options.
+  3. **Student Answers**: Submit formatted answers (e.g. `1-A, 2-C, 3-B...`).
+  4. **AI Checks Answers**: Instant scoring and explanation of mistakes.
+  5. **Score Summary**: Performance evaluation.
+  6. **Next Topic**: Progression to the next logical topic in the document.
+
+### 5. Adaptive Quizzes (`/quiz`), Written Tests (`/test`), & Short Notes (`/short_note`)
+- 5-MCQ interactive quizzes per topic.
+- 3-Question written conceptual tests graded by AI with letter grades and step-by-step feedback.
+- High-yield summary notes tailored to student grade level.
+
+---
+
+## 🗄️ MongoDB Atlas Collections
+
+The platform utilizes 16 collections:
+1. `students` — User profiles, registration, phone, enrolled courses, and approval status.
+2. `courses` — Curriculum course catalog.
+3. `subjects` — Subject classifications.
+4. `chapters` — Structured chapter listings.
+5. `study_materials` — Uploaded PDF text, summaries, and detected topics.
+6. `payments` — Student fee calculations, course lists, and status.
+7. `payment_receipts` — Uploaded receipt images and audit links.
+8. `learning_sessions` — Active study sessions and learning stages.
+9. `quiz_sessions` — 5-MCQ active sessions and scores.
+10. `quiz_questions` — Individual quiz questions and options.
+11. `quiz_results` — Historical quiz performance records.
+12. `test_results` — Written test evaluations and feedback.
+13. `progress` — Student mastery, accuracy metrics, weak/strong topics.
+14. `conversations` — Chat history memory.
+15. `admin_logs` — Action audit logs for approvals, rejections, and pricing changes.
+16. `pricing` — Historical and active course pricing versions.
+
+---
+
+## ⚙️ Installation & Setup
+
+### 1. Clone & Install Dependencies
 ```bash
-# Clone the repository
-git clone <repository_url>
-cd "Ai Bot"
+git clone https://github.com/Yusuf7298/Smart-Study.git
+cd Smart-Study
 
 # Create virtual environment
 python -m venv .venv
-# Activate virtual environment
-# Windows:
-.venv\Scripts\activate
-# Linux/macOS:
-source .venv/bin/activate
+source .venv/bin/activate  # Linux/macOS
+.venv\Scripts\activate     # Windows
 
-# Install dependencies
+# Install packages
 pip install -r requirements.txt
 ```
 
-### 3. Configuration (`.env`)
-Create a `.env` file in the root directory:
-```env
-BOT_TOKEN=your_telegram_bot_token_here
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-3.5-flash
-DATABASE_PATH=tutor_bot.db
-ADMIN_IDS=8223004316
-MAX_FILE_SIZE_MB=20
-RATE_LIMIT_REQUESTS=20
-RATE_LIMIT_WINDOW_SECONDS=60
-```
-
-### 4. Running the Bot
+### 2. Configure Environment Variables
+Copy `.env.example` to `.env` and fill in your credentials:
 ```bash
-python main.py
+cp .env.example .env
 ```
+Key configuration parameters:
+- `BOT_TOKEN`: From Telegram [@BotFather](https://t.me/BotFather)
+- `GEMINI_API_KEY`: From [Google AI Studio](https://aistudio.google.com/)
+- `MONGO_URI`: MongoDB Atlas connection URI (`mongodb+srv://...`)
+- `ADMIN_IDS`: Numeric Telegram IDs of administrators
 
 ---
 
-## 🧪 Running Automated Tests
+## 🧪 Testing & Verification
 
-Run the complete test suite:
+Run the comprehensive unit and integration test suite:
 ```bash
-# Run all unit and integration tests
 python -m unittest discover -s tests -p "test_*.py" -v
+```
 
-# Run syntax compilation across all files
-python -m compileall .
+Audit callbacks and commands:
+```bash
+python tests/audit_callbacks.py
+```
+
+Validate compilation:
+```bash
+python -m compileall bot main.py config.py tests
 ```
 
 ---
 
-## 🛡️ Production Deployment & Maintenance
+## 🚀 Deployment Options
 
-### Systemd Service (Linux Deployment)
-Create `/etc/systemd/system/smartstudybot.service`:
-```ini
-[Unit]
-Description=Smart Study Bot Telegram Service
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/opt/smartstudybot
-ExecStart=/opt/smartstudybot/.venv/bin/python main.py
-Restart=always
-RestartSec=5
-EnvironmentFile=/opt/smartstudybot/.env
-
-[Install]
-WantedBy=multi-user.target
-```
+### Option A: Docker Compose (Recommended)
+Deploying with Docker provides isolated environments, automatic restart policies, and persistent storage:
 
 ```bash
+# 1. Clone repository & configure environment
+git clone https://github.com/Yusuf7298/Smart-Study.git
+cd Smart-Study
+cp .env.example .env
+nano .env  # Add your BOT_TOKEN, GEMINI_API_KEY, MONGO_URI, ADMIN_IDS
+
+# 2. Build and start the container in detached mode
+docker compose up -d --build
+
+# 3. View live logs
+docker compose logs -f
+
+# 4. Stop or restart
+docker compose restart
+docker compose down
+```
+
+---
+
+### Option B: Linux VPS with Systemd (Ubuntu / Debian)
+For dedicated or virtual servers (DigitalOcean, Hetzner, AWS EC2, Linode):
+
+```bash
+# 1. Setup system dependencies and Python 3.11+
+sudo apt update && sudo apt install -y python3 python3-pip python3-venv git
+
+# 2. Clone repo and setup virtualenv
+git clone https://github.com/Yusuf7298/Smart-Study.git /home/ubuntu/Ethio-Smart-Study
+cd /home/ubuntu/Ethio-Smart-Study
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip setuptools wheel
+pip install -r requirements.txt
+
+# 3. Configure environment
+cp .env.example .env
+nano .env
+
+# 4. Install & Enable Systemd Service
+sudo cp ethio-smart-study.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable smartstudybot
-sudo systemctl start smartstudybot
-```
+sudo systemctl enable ethio-smart-study
+sudo systemctl start ethio-smart-study
 
-### Database Backup
-The SQLite database file `tutor_bot.db` contains all tables. Backup using:
-```bash
-sqlite3 tutor_bot.db ".backup 'backup_$(date +%Y%m%d_%H%M%S).db'"
+# 5. Monitor service
+sudo systemctl status ethio-smart-study
+sudo journalctl -u ethio-smart-study -f
 ```
 
 ---
 
-## 📋 Available Commands
+### Option C: Cloud PaaS (Render / Railway / Fly.io)
+1. Fork or push the repo to GitHub.
+2. Create a new **Background Worker** or **Web Service** in Render / Railway.
+3. Select **Docker** deployment or **Python 3.11** runtime.
+4. Set the Start Command: `python main.py`.
+5. Add all Environment Variables from `.env` in the dashboard secrets tab.
 
-| Command | Description |
-|---|---|
-| `/start` | Launch registration or open main dashboard |
-| `/menu` | Open interactive main menu |
-| `/study` | Select subject, topic, and enter study mode |
-| `/pdf` | Upload and study from PDF documents |
-| `/materials` | Manage uploaded study documents |
-| `/quiz` | Start 5-question adaptive multiple-choice quiz |
-| `/test` | Take 3-question conceptual written test |
-| `/test_history` | View previous written test evaluations |
-| `/short_note` | Generate high-yield study summary notes |
-| `/progress` | View comprehensive academic progress |
-| `/profile` | Change grade or preferred language |
-| `/current` | View currently active study session |
-| `/cancel` | Cancel current quiz, session, or action |
-| `/newchat` | Reset conversation history |
-| `/admin` | Administrator control dashboard (Admin only) |
-| `/broadcast <msg>` | Broadcast announcement to approved students (Admin only) |
-| `/admin_search <q>` | Search students by name or ID (Admin only) |
-| `/help` | View user guide in preferred language |
+---
+
+## 👥 Support & Contact
+- **Owner**: Yusuf Mohammed
+- **Telegram Support**: [@Cs1At07](https://t.me/Cs1At07)
+- **Phone**: `0928892344`
+

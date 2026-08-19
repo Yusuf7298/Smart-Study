@@ -4,7 +4,6 @@ from bot.database.database import get_db_connection
 from bot.database.models import ConversationModel
 
 def get_conversation_history(telegram_id: int, limit: int = 20) -> list[ConversationModel]:
-    """Fetches the last `limit` messages for a user in chronological order (ASC)."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -41,7 +40,6 @@ def get_conversation_history(telegram_id: int, limit: int = 20) -> list[Conversa
     return history
 
 def add_conversation_message(telegram_id: int, role: str, message: str) -> None:
-    """Inserts a single message into the conversation history."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -52,7 +50,6 @@ def add_conversation_message(telegram_id: int, role: str, message: str) -> None:
     conn.close()
 
 def delete_conversation_history(telegram_id: int) -> None:
-    """Deletes all conversation messages for a user."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""

@@ -1,0 +1,17 @@
+[Unit]
+Description=Ethio Smart Study AI Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Ethio-Smart-Study
+EnvironmentFile=/home/ubuntu/Ethio-Smart-Study/.env
+ExecStart=/home/ubuntu/Ethio-Smart-Study/.venv/bin/python main.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

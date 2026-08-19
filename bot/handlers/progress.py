@@ -2,17 +2,14 @@ from typing import Optional
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-
 from bot.services import student_service, progress_service
 from bot.services.i18n import t
 from bot.utils import safe_reply
 
 router = Router()
-
 @router.message(Command("progress"), StateFilter(None))
 @router.message(F.text.in_(["📊 My Progress", "📊 የኔ ውጤት/እድገት", "📊 Guddina Koo"]), StateFilter(None))
 async def show_progress_message(message: Message, telegram_id: Optional[int] = None):
-    """Displays the student's comprehensive learning progress dashboard."""
     tid = telegram_id or (message.from_user.id if message.from_user else None)
     if not tid:
         return
@@ -52,6 +49,5 @@ async def show_progress_message(message: Message, telegram_id: Optional[int] = N
 
 @router.callback_query(F.data == "menu_progress", StateFilter(None))
 async def progress_callback(callback: CallbackQuery):
-    """Callback trigger for progress dashboard from main menu."""
     await show_progress_message(callback.message, telegram_id=callback.from_user.id)
     await callback.answer()

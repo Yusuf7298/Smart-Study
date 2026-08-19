@@ -3,34 +3,48 @@ import logging
 import config
 
 def get_db_connection() -> sqlite3.Connection:
-    """Creates and returns a connection to the SQLite database with Row factory and busy timeout."""
     conn = sqlite3.connect(config.DATABASE_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db() -> None:
-    """Initializes all database tables, foreign keys, migrations, and indexes."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("PRAGMA foreign_keys=ON;")
     
-    # 1. Students table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('price_per_course', ?)", (str(config.DEFAULT_PRICE_PER_COURSE_ETB),))
+    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS students (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             telegram_id INTEGER UNIQUE NOT NULL,
             first_name TEXT,
             username TEXT,
+            phone_number TEXT,
             grade TEXT,
             education_level TEXT,
             preferred_language TEXT DEFAULT 'English',
-            approval_status TEXT DEFAULT 'PENDING' CHECK(approval_status IN ('PENDING', 'APPROVED', 'REJECTED')),
+            approval_status TEXT DEFAULT 'REGISTRATION_PENDING',
+            selected_courses_json TEXT DEFAULT '[]',
+            payment_amount INTEGER DEFAULT 0,
+            payment_screenshot_file_id TEXT,
+            payment_screenshot_path TEXT,
+            payment_submitted_at TIMESTAMP,
+            approved_at TIMESTAMP,
+            rejected_reason TEXT,
+            has_exam_package INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     
-    # 2. Conversation history table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS conversation (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,7 +56,6 @@ def init_db() -> None:
         )
     """)
     
-    # 3. Learning sessions table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS learning_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,8 +70,7 @@ def init_db() -> None:
             FOREIGN KEY(telegram_id) REFERENCES students(telegram_id)
         )
     """)
-    
-    # 4. Quiz sessions table
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quiz_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +90,6 @@ def init_db() -> None:
         )
     """)
     
-    # 5. Quiz questions table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS quiz_questions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,7 +107,6 @@ def init_db() -> None:
         )
     """)
     
-    # 6. Test results table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS test_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,7 +125,6 @@ def init_db() -> None:
         )
     """)
     
-    # 7. Study materials / PDF memory table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS study_materials (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -138,7 +147,6 @@ def init_db() -> None:
         )
     """)
     
-    # 8. Admin audit logs table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS admin_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,14 +154,67 @@ def init_db() -> None:
             action TEXT NOT NULL,
             target_id INTEGER,
             details TEXT,
+            old_status TEXT,
+            new_status TEXT,
+            amount INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     
-    # 9. Run schema migrations BEFORE creating indexes on newly added columns
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS courses (
+            course_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            emoji TEXT DEFAULT '📚',
+            description TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chapters (
+            chapter_id TEXT PRIMARY KEY,
+            course_id TEXT NOT NULL,
+            chapter_number INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            topics_json TEXT DEFAULT '[]',
+            is_active INTEGER DEFAULT 1
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS payments (
+            payment_id TEXT PRIMARY KEY,
+            telegram_id INTEGER NOT NULL,
+            selected_courses_json TEXT NOT NULL,
+            unit_price INTEGER DEFAULT 50,
+            total_amount INTEGER NOT NULL,
+            currency TEXT DEFAULT 'ETB',
+            pricing_version INTEGER DEFAULT 1,
+            status TEXT DEFAULT 'PENDING',
+            receipt_file_id TEXT,
+            receipt_storage_path TEXT,
+            submitted_at TIMESTAMP,
+            reviewed_at TIMESTAMP,
+            reviewed_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pricing (
+            pricing_id TEXT PRIMARY KEY,
+            course_price INTEGER NOT NULL DEFAULT 50,
+            currency TEXT DEFAULT 'ETB',
+            is_active INTEGER DEFAULT 1,
+            version INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
     migrate_db_internal(cursor)
     
-    # 10. Create indexes for optimal query performance
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_telegram_id ON students (telegram_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_status ON students (approval_status);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversation_telegram_id ON conversation (telegram_id);")
@@ -173,20 +234,70 @@ def init_db() -> None:
 
 def migrate_db_internal(cursor: sqlite3.Cursor) -> None:
     """Internal helper to add missing columns to existing tables before index creation."""
-    # 1. Check students table columns
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('price_per_course', ?)", (str(config.DEFAULT_PRICE_PER_COURSE_ETB),))
+
+    
     cursor.execute("PRAGMA table_info(students)")
     columns = [row['name'] if isinstance(row, sqlite3.Row) else row[1] for row in cursor.fetchall()]
-    if 'approval_status' not in columns and len(columns) > 0:
-        logging.info("Migrating database: adding approval_status to students table")
-        try:
-            cursor.execute("""
-                ALTER TABLE students 
-                ADD COLUMN approval_status TEXT DEFAULT 'APPROVED' CHECK(approval_status IN ('PENDING', 'APPROVED', 'REJECTED'))
-            """)
-        except Exception as e:
-            logging.error(f"Error migrating students table: {e}")
+    if len(columns) > 0:
+        if 'approval_status' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN approval_status TEXT DEFAULT 'REGISTRATION_PENDING'")
+            except Exception as e:
+                logging.error(f"Error adding approval_status: {e}")
+        if 'phone_number' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN phone_number TEXT")
+            except Exception as e:
+                logging.error(f"Error adding phone_number: {e}")
+        if 'selected_courses_json' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN selected_courses_json TEXT DEFAULT '[]'")
+            except Exception as e:
+                logging.error(f"Error adding selected_courses_json: {e}")
+        if 'payment_amount' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN payment_amount INTEGER DEFAULT 0")
+            except Exception as e:
+                logging.error(f"Error adding payment_amount: {e}")
+        if 'payment_screenshot_file_id' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN payment_screenshot_file_id TEXT")
+            except Exception as e:
+                logging.error(f"Error adding payment_screenshot_file_id: {e}")
+        if 'payment_screenshot_path' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN payment_screenshot_path TEXT")
+            except Exception as e:
+                logging.error(f"Error adding payment_screenshot_path: {e}")
+        if 'payment_submitted_at' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN payment_submitted_at TIMESTAMP")
+            except Exception as e:
+                logging.error(f"Error adding payment_submitted_at: {e}")
+        if 'approved_at' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN approved_at TIMESTAMP")
+            except Exception as e:
+                logging.error(f"Error adding approved_at: {e}")
+        if 'rejected_reason' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN rejected_reason TEXT")
+            except Exception as e:
+                logging.error(f"Error adding rejected_reason: {e}")
+        if 'has_exam_package' not in columns:
+            try:
+                cursor.execute("ALTER TABLE students ADD COLUMN has_exam_package INTEGER DEFAULT 0")
+            except Exception as e:
+                logging.error(f"Error adding has_exam_package: {e}")
             
-    # 2. Check learning_sessions table columns
     cursor.execute("PRAGMA table_info(learning_sessions)")
     learn_columns = [row['name'] if isinstance(row, sqlite3.Row) else row[1] for row in cursor.fetchall()]
     if 'subtopic' not in learn_columns and len(learn_columns) > 0:
@@ -195,7 +306,6 @@ def migrate_db_internal(cursor: sqlite3.Cursor) -> None:
         except Exception as e:
             logging.error(f"Error adding subtopic: {e}")
 
-    # 3. Check quiz_sessions table columns
     cursor.execute("PRAGMA table_info(quiz_sessions)")
     quiz_columns = [row['name'] if isinstance(row, sqlite3.Row) else row[1] for row in cursor.fetchall()]
     if 'updated_at' not in quiz_columns and len(quiz_columns) > 0:
@@ -204,7 +314,6 @@ def migrate_db_internal(cursor: sqlite3.Cursor) -> None:
         except Exception as e:
             logging.error(f"Error adding updated_at to quiz_sessions: {e}")
 
-    # 4. Check quiz_questions table columns
     cursor.execute("PRAGMA table_info(quiz_questions)")
     qq_columns = [row['name'] if isinstance(row, sqlite3.Row) else row[1] for row in cursor.fetchall()]
     if 'created_at' not in qq_columns and len(qq_columns) > 0:
@@ -213,7 +322,6 @@ def migrate_db_internal(cursor: sqlite3.Cursor) -> None:
         except Exception as e:
             logging.error(f"Error adding created_at to quiz_questions: {e}")
 
-    # 5. Check study_materials table columns
     cursor.execute("PRAGMA table_info(study_materials)")
     mat_columns = [row['name'] if isinstance(row, sqlite3.Row) else row[1] for row in cursor.fetchall()]
     if len(mat_columns) > 0:
@@ -239,9 +347,13 @@ def migrate_db_internal(cursor: sqlite3.Cursor) -> None:
                 logging.error(f"Error adding is_deleted: {e}")
 
 def migrate_db() -> None:
-    """Public wrapper to migrate existing database schemas safely."""
     conn = get_db_connection()
     cursor = conn.cursor()
     migrate_db_internal(cursor)
     conn.commit()
     conn.close()
+
+async def init_database() -> None:
+    init_db()
+    from bot.database.mongo import init_mongo_db
+    await init_mongo_db()

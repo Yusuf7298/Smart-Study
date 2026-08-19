@@ -3,9 +3,9 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from bot.database.database import get_db_connection
 from bot.database.models import StudentModel, AdminLogModel
+from bot.database.repositories.student import _row_to_student
 
 def log_admin_action(admin_id: int, action: str, target_id: Optional[int] = None, details: Optional[str] = None) -> None:
-    """Logs an administrative action (APPROVE, REJECT, BROADCAST) to the admin_logs table."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -16,7 +16,6 @@ def log_admin_action(admin_id: int, action: str, target_id: Optional[int] = None
     conn.close()
 
 def get_admin_dashboard_stats() -> Dict[str, Any]:
-    """Aggregates system-wide analytics for the administrator control dashboard."""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -26,7 +25,7 @@ def get_admin_dashboard_stats() -> Dict[str, Any]:
     cursor.execute("SELECT COUNT(*) as approved FROM students WHERE approval_status = 'APPROVED'")
     approved_students = cursor.fetchone()['approved']
     
-    cursor.execute("SELECT COUNT(*) as pending FROM students WHERE approval_status = 'PENDING'")
+    cursor.execute("SELECT COUNT(*) as pending FROM students WHERE approval_status IN ('PENDING', 'PAYMENT_PENDING', 'PAYMENT_SUBMITTED', 'REGISTRATION_PENDING')")
     pending_students = cursor.fetchone()['pending']
     
     cursor.execute("SELECT COUNT(*) as rejected FROM students WHERE approval_status = 'REJECTED'")
@@ -58,16 +57,24 @@ def get_admin_dashboard_stats() -> Dict[str, Any]:
     }
 
 def get_pending_students(limit: int = 20) -> List[StudentModel]:
-    """Retrieves all students currently waiting for administrator approval."""
-    return get_students_by_status("PENDING", limit)
-
-def get_students_by_status(status: str, limit: int = 20) -> List[StudentModel]:
-    """Retrieves students by approval status (PENDING, APPROVED, REJECTED)."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, telegram_id, first_name, username, grade, education_level,
-               preferred_language, approval_status, created_at, updated_at
+        SELECT *
+        FROM students
+        WHERE approval_status IN ('PENDING', 'PAYMENT_PENDING', 'PAYMENT_SUBMITTED', 'REGISTRATION_PENDING')
+        ORDER BY updated_at DESC
+        LIMIT ?
+    """, (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [_row_to_student(r) for r in rows]
+
+def get_students_by_status(status: str, limit: int = 20) -> List[StudentModel]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT *
         FROM students
         WHERE approval_status = ?
         ORDER BY updated_at DESC
@@ -78,24 +85,21 @@ def get_students_by_status(status: str, limit: int = 20) -> List[StudentModel]:
     return [_row_to_student(r) for r in rows]
 
 def search_students(query: str, limit: int = 20) -> List[StudentModel]:
-    """Searches students by name, username, or telegram_id."""
     conn = get_db_connection()
     cursor = conn.cursor()
     search_param = f"%{query.strip()}%"
     cursor.execute("""
-        SELECT id, telegram_id, first_name, username, grade, education_level,
-               preferred_language, approval_status, created_at, updated_at
+        SELECT *
         FROM students
-        WHERE first_name LIKE ? OR username LIKE ? OR CAST(telegram_id AS TEXT) LIKE ?
+        WHERE first_name LIKE ? OR username LIKE ? OR phone_number LIKE ? OR CAST(telegram_id AS TEXT) LIKE ?
         ORDER BY updated_at DESC
         LIMIT ?
-    """, (search_param, search_param, search_param, limit))
+    """, (search_param, search_param, search_param, search_param, limit))
     rows = cursor.fetchall()
     conn.close()
     return [_row_to_student(r) for r in rows]
 
 def get_all_approved_student_ids() -> List[int]:
-    """Retrieves all Telegram IDs of approved students (for broadcasts)."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT telegram_id FROM students WHERE approval_status = 'APPROVED'")
@@ -103,18 +107,18 @@ def get_all_approved_student_ids() -> List[int]:
     conn.close()
     return [r['telegram_id'] for r in rows]
 
-def get_admin_logs(limit: int = 15) -> List[AdminLogModel]:
-    """Retrieves recent administrator action logs."""
+def get_admin_logs(limit: int = 20) -> List[AdminLogModel]:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, admin_id, action, target_id, details, created_at
         FROM admin_logs
-        ORDER BY id DESC
+        ORDER BY created_at DESC
         LIMIT ?
     """, (limit,))
     rows = cursor.fetchall()
     conn.close()
+    
     logs = []
     for r in rows:
         c_at = r['created_at']
@@ -134,29 +138,3 @@ def get_admin_logs(limit: int = 15) -> List[AdminLogModel]:
             )
         )
     return logs
-
-def _row_to_student(row: sqlite3.Row) -> StudentModel:
-    c_at = row['created_at']
-    if isinstance(c_at, str):
-        try:
-            c_at = datetime.fromisoformat(c_at.replace('Z', '+00:00'))
-        except ValueError:
-            c_at = datetime.now()
-    u_at = row['updated_at']
-    if isinstance(u_at, str):
-        try:
-            u_at = datetime.fromisoformat(u_at.replace('Z', '+00:00'))
-        except ValueError:
-            u_at = datetime.now()
-    return StudentModel(
-        id=row['id'],
-        telegram_id=row['telegram_id'],
-        first_name=row['first_name'],
-        username=row['username'],
-        grade=row['grade'],
-        education_level=row['education_level'],
-        preferred_language=row['preferred_language'],
-        approval_status=row['approval_status'],
-        created_at=c_at,
-        updated_at=u_at
-    )

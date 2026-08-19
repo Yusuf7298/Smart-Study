@@ -1,7 +1,5 @@
 import os
 import re
-
-# 1. Collect all callback_data from keyboards and handlers
 callback_datas = set()
 for root, dirs, files in os.walk('bot'):
     for f in files:
@@ -12,8 +10,6 @@ for root, dirs, files in os.walk('bot'):
                 matches = re.findall(r'callback_data=["\']([^"\']+)["\']', content)
                 for m in matches:
                     callback_datas.add(m)
-
-# 2. Collect all handled callback prefixes/exact matches in bot/handlers/
 handled_exact = set()
 handled_prefixes = []
 for root, dirs, files in os.walk('bot/handlers'):
@@ -52,8 +48,6 @@ if unhandled:
     print(f"Unhandled callback list: {unhandled}")
 else:
     print("SUCCESS: 100% of all callback buttons are properly routed to active handlers!")
-
-# 3. Command Audit
 commands = set()
 for root, dirs, files in os.walk('bot/handlers'):
     for f in files:

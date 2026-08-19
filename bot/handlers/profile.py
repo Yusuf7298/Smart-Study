@@ -4,7 +4,6 @@ from aiogram.filters import Command, StateFilter
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-
 from bot.services import student_service, learning_service
 from bot.services.i18n import t
 from bot.handlers.registration import get_grades_keyboard, get_languages_keyboard
@@ -17,7 +16,6 @@ class ProfileStates(StatesGroup):
     waiting_for_language = State()
 
 def get_profile_inline_keyboard(lang: str = "English") -> InlineKeyboardMarkup:
-    """Returns profile settings keyboard."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text=t("profile_btn_change_grade", lang), callback_data="profile_change_grade"),
@@ -29,7 +27,6 @@ def get_profile_inline_keyboard(lang: str = "English") -> InlineKeyboardMarkup:
     ])
 
 async def send_profile_message(message: Message, telegram_id: int):
-    """Sends the formatted profile card to the student."""
     student = await student_service.get_student(telegram_id)
     if not student:
         first_name = message.from_user.first_name if message.from_user else None
@@ -41,6 +38,9 @@ async def send_profile_message(message: Message, telegram_id: int):
     member_since = student.created_at.strftime("%Y-%m-%d")
     name_str = student.first_name or student.username or "Student"
 
+    phone_str = student.phone_number or "N/A"
+    from bot.services.i18n import get_subject_name_in_lang
+    courses_str = "\n".join([f"• {get_subject_name_in_lang(c, lang)}" for c in student.selected_courses]) if student.selected_courses else "• All Courses"
     active_session = await learning_service.get_active_session(telegram_id)
     topic_str = f"{active_session.subject} → {active_session.topic}" if active_session else "None"
 
@@ -48,9 +48,11 @@ async def send_profile_message(message: Message, telegram_id: int):
         "profile_title",
         lang,
         name=name_str,
+        phone=phone_str,
         telegram_id=telegram_id,
         grade=grade_str,
         language=lang,
+        courses=courses_str,
         registered_date=member_since,
         topic=topic_str
     )
@@ -71,19 +73,29 @@ async def menu_profile_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data == "profile_change_grade", StateFilter(None))
 async def change_grade_callback(callback: CallbackQuery, state: FSMContext):
-    """Prompts grade selection using the standard grade keyboard."""
-    from bot.handlers.registration import RegistrationStates
-    await state.set_state(RegistrationStates.waiting_for_grade)
+    telegram_id = callback.from_user.id
+    student = await student_service.get_student(telegram_id)
+    lang = student.preferred_language if student else "English"
+    
+    support_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📞 Contact Support (@Cs1At07)", url="https://t.me/Cs1At07")],
+        [InlineKeyboardButton(text="🔙 Back to Profile", callback_data="menu_profile")]
+    ])
+    
     await safe_edit(
         callback.message,
-        "🎓 Select your new grade level or academic status:",
-        reply_markup=get_grades_keyboard()
+        "🔒 Grade Level & Courses Locked\n━━━━━━━━━━━━━━━━━━━━\n"
+        "Your registered grade level and enrolled courses are locked to maintain curriculum consistency.\n\n"
+        "To upgrade your grade level or add more courses, please contact our support team:\n"
+        "• 💬 Telegram: [@Cs1At07](https://t.me/Cs1At07)\n"
+        "• 📱 Phone: `0928892344`\n\n"
+        "We will assist you with updating your enrollment! 🎓",
+        reply_markup=support_kb
     )
     await callback.answer()
 
 @router.callback_query(F.data == "profile_change_language", StateFilter(None))
 async def change_language_callback(callback: CallbackQuery, state: FSMContext):
-    """Prompts language selection using the standard language keyboard."""
     from bot.handlers.registration import RegistrationStates
     await state.set_state(RegistrationStates.waiting_for_language)
     await safe_edit(

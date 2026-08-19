@@ -5,7 +5,6 @@ from bot.database.database import get_db_connection
 from bot.database.models import QuizSessionModel, QuizQuestionModel
 
 def get_quiz_session_by_id(quiz_session_id: int) -> Optional[QuizSessionModel]:
-    """Retrieves a quiz session by its database ID."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -32,7 +31,6 @@ def get_quiz_session_by_id(quiz_session_id: int) -> Optional[QuizSessionModel]:
     )
 
 def get_active_quiz_session(telegram_id: int) -> Optional[QuizSessionModel]:
-    """Retrieves the current active quiz session for a student."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -62,7 +60,6 @@ def get_active_quiz_session(telegram_id: int) -> Optional[QuizSessionModel]:
     )
 
 def create_quiz_session(telegram_id: int, learning_session_id: int, subject: str, topic: str, total_questions: int = 5) -> QuizSessionModel:
-    """Creates a new active quiz session."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -75,7 +72,6 @@ def create_quiz_session(telegram_id: int, learning_session_id: int, subject: str
     return get_quiz_session_by_id(session_id)
 
 def update_session_progress(quiz_session_id: int, current_question: int) -> None:
-    """Updates the session progress counter."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -87,7 +83,6 @@ def update_session_progress(quiz_session_id: int, current_question: int) -> None
     conn.close()
 
 def increment_correct_score(quiz_session_id: int) -> None:
-    """Increments the correct answers score counter by 1."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -99,7 +94,6 @@ def increment_correct_score(quiz_session_id: int) -> None:
     conn.close()
 
 def set_quiz_status(quiz_session_id: int, status: str) -> None:
-    """Sets the status of a quiz session (ACTIVE, COMPLETED, CANCELLED)."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -111,7 +105,6 @@ def set_quiz_status(quiz_session_id: int, status: str) -> None:
     conn.close()
 
 def deactivate_all_active_quizzes(telegram_id: int) -> None:
-    """Cancels/deactivates any currently ACTIVE quiz sessions for a student."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -130,7 +123,6 @@ def save_quiz_question(
     correct_answer: str,
     explanation: str
 ) -> QuizQuestionModel:
-    """Inserts a generated question into the quiz questions table."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -143,7 +135,6 @@ def save_quiz_question(
     return get_question_by_id(question_id)
 
 def get_question_by_id(question_id: int) -> QuizQuestionModel:
-    """Retrieves a quiz question by database ID."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -169,7 +160,6 @@ def get_question_by_id(question_id: int) -> QuizQuestionModel:
     )
 
 def get_question_by_number(quiz_session_id: int, question_number: int) -> Optional[QuizQuestionModel]:
-    """Retrieves a specific question from a quiz session."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -184,7 +174,6 @@ def get_question_by_number(quiz_session_id: int, question_number: int) -> Option
     return get_question_by_id(row['id'])
 
 def submit_student_answer(question_id: int, student_answer: str, is_correct: int) -> None:
-    """Submits the student's answer to the database."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""

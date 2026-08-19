@@ -2,3 +2,13 @@
 .env
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+data/
+data/uploads/
+data/receipts/
+.DS_Store
+Thumbs.db
+tutor_bot.db

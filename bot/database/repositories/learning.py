@@ -5,7 +5,6 @@ from bot.database.database import get_db_connection
 from bot.database.models import LearningSessionModel
 
 def get_active_session_by_id(telegram_id: int) -> Optional[LearningSessionModel]:
-    """Retrieves the current active learning session for a student."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -33,7 +32,6 @@ def get_active_session_by_id(telegram_id: int) -> Optional[LearningSessionModel]
     )
 
 def deactivate_all_sessions(telegram_id: int) -> None:
-    """Sets is_active = 0 for all of a student's learning sessions."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -45,11 +43,8 @@ def deactivate_all_sessions(telegram_id: int) -> None:
     conn.close()
 
 def create_session(telegram_id: int, subject: str, topic: str, stage: str = 'INTRODUCTION') -> LearningSessionModel:
-    """Creates a new active learning session or reuses an existing session for the same subject and topic."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Check if a session already exists for this user, subject, and topic
     cursor.execute("""
         SELECT id FROM learning_sessions
         WHERE telegram_id = ? AND subject = ? AND topic = ?
@@ -58,14 +53,12 @@ def create_session(telegram_id: int, subject: str, topic: str, stage: str = 'INT
     row = cursor.fetchone()
     
     if row:
-        # Reuse existing: make it active
         cursor.execute("""
             UPDATE learning_sessions
             SET is_active = 1, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (row['id'],))
     else:
-        # Create new
         cursor.execute("""
             INSERT INTO learning_sessions (telegram_id, subject, topic, stage, is_active)
             VALUES (?, ?, ?, ?, 1)
@@ -76,7 +69,6 @@ def create_session(telegram_id: int, subject: str, topic: str, stage: str = 'INT
     return get_active_session_by_id(telegram_id)
 
 def update_session_stage(session_id: int, stage: str) -> None:
-    """Updates the stage of a learning session (e.g. PRACTICE, REVIEW, etc.)."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""

@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict, Any
+import json
 
 @dataclass
 class StudentModel:
@@ -12,8 +13,69 @@ class StudentModel:
     education_level: Optional[str]
     preferred_language: str
     approval_status: str
-    created_at: datetime
-    updated_at: datetime
+    phone_number: Optional[str] = None
+    selected_courses_json: Optional[str] = "[]"
+    payment_amount: int = 0
+    payment_screenshot_file_id: Optional[str] = None
+    payment_screenshot_path: Optional[str] = None
+    payment_submitted_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    rejected_reason: Optional[str] = None
+    has_exam_package: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @property
+    def selected_courses(self) -> List[str]:
+        if not self.selected_courses_json:
+            return []
+        try:
+            data = json.loads(self.selected_courses_json)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+@dataclass
+class CourseModel:
+    id: str
+    name: str
+    emoji: str = "📚"
+    description: Optional[str] = None
+    is_active: bool = True
+
+@dataclass
+class ChapterModel:
+    id: str
+    course_id: str
+    chapter_number: int
+    title: str
+    topics: List[str] = field(default_factory=list)
+
+@dataclass
+class PricingModel:
+    id: str
+    course_price: int = 50
+    currency: str = "ETB"
+    is_active: bool = True
+    version: int = 1
+    created_at: Optional[datetime] = None
+
+@dataclass
+class PaymentModel:
+    id: str
+    telegram_id: int
+    selected_courses: List[str]
+    unit_price: int
+    total_amount: int
+    currency: str = "ETB"
+    pricing_version: int = 1
+    status: str = "PENDING"
+    receipt_file_id: Optional[str] = None
+    receipt_storage_path: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[int] = None
+    created_at: Optional[datetime] = None
 
 @dataclass
 class ConversationModel:
@@ -63,6 +125,15 @@ class QuizQuestionModel:
     created_at: datetime
     answered_at: Optional[datetime]
 
+    @property
+    def options(self) -> List[str]:
+        if not self.options_json:
+            return []
+        try:
+            return json.loads(self.options_json)
+        except Exception:
+            return []
+
 @dataclass
 class TestResultModel:
     id: int
@@ -98,6 +169,31 @@ class StudyMaterialModel:
     is_deleted: int
     created_at: datetime
 
+    @property
+    def topics(self) -> List[str]:
+        if not self.topics_json:
+            return []
+        try:
+            return json.loads(self.topics_json)
+        except Exception:
+            return []
+
+@dataclass
+class ProgressModel:
+    telegram_id: int
+    courses_completed: List[str] = field(default_factory=list)
+    chapters_completed: List[str] = field(default_factory=list)
+    topics_completed: List[str] = field(default_factory=list)
+    total_quizzes_taken: int = 0
+    total_quiz_score: int = 0
+    total_quiz_questions: int = 0
+    total_tests_taken: int = 0
+    total_test_score: int = 0
+    total_pdf_sessions: int = 0
+    strong_topics: List[str] = field(default_factory=list)
+    weak_topics: List[str] = field(default_factory=list)
+    total_study_minutes: int = 0
+
 @dataclass
 class AdminLogModel:
     id: int
@@ -106,3 +202,6 @@ class AdminLogModel:
     target_id: Optional[int]
     details: Optional[str]
     created_at: datetime
+    old_status: Optional[str] = None
+    new_status: Optional[str] = None
+    amount: Optional[int] = None

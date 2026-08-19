@@ -102,6 +102,35 @@ async def clear_confirm_callback(callback: CallbackQuery):
         await safe_edit(callback.message, "❌ Error clearing history. Please try again.") # type: ignore
     await callback.answer()
 
+@router.message(Command("clear"))
+@router.message(F.text.in_(["🧹 Clear", "Clear", "🧹 Chat አጽዳ", "🧹 Qulqulleessi", "🧹 Clear Chat", "🧹 አጽዳ", "አጽዳ"]))
+async def reply_clear_button_handler(message: Message, state: FSMContext):
+    """Handles the Clear reply button: resets chat history, cancels active sessions and FSM."""
+    await state.clear()
+    telegram_id = message.from_user.id if message.from_user else None
+    if not telegram_id:
+        return
+        
+    try:
+        await conversation_service.clear_history(telegram_id)
+        await learning_service.deactivate_sessions(telegram_id)
+        await quiz_service.cancel_quiz(telegram_id)
+    except Exception as e:
+        logging.warning(f"Error resetting state on Clear button: {e}")
+        
+    student = await student_service.get_student(telegram_id)
+    lang = student.preferred_language if student else "English"
+    from bot.keyboards.main_menu import get_main_reply_keyboard
+    
+    await safe_reply(
+        message,
+        "🧹 *Chat History & Session Cleared!*\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "All previous conversation memory and active study sessions have been reset.\n"
+        "You can now start a fresh conversation or tap *📱 Menu* to study.",
+        reply_markup=get_main_reply_keyboard(lang)
+    )
+
 @router.callback_query(F.data == "clear_cancel")
 async def clear_cancel_callback(callback: CallbackQuery):
     await safe_edit(callback.message, "❌ Clear chat cancelled.") # type: ignore
@@ -168,8 +197,9 @@ async def chat(message: Message):
         )
         
         # 5. Automatically update student profile if a new grade or language is detected
-        if extracted_grade is not None and extracted_grade != student.grade:
-            await student_service.update_grade(telegram_id, str(extracted_grade))
+        if extracted_grade is not None and str(extracted_grade) != str(student.grade):
+            if not student.grade or student.approval_status != 'APPROVED':
+                await student_service.update_grade(telegram_id, str(extracted_grade))
             
         if extracted_language is not None and extracted_language != student.preferred_language:
             await student_service.update_language(telegram_id, extracted_language)

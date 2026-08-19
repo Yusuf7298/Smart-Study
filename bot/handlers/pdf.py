@@ -1,3 +1,4 @@
+from bot.database.models import StudentModel
 import io
 import json
 import logging
@@ -24,7 +25,6 @@ class PDFStates(StatesGroup):
     waiting_for_pdf_question = State()
 
 def get_pdf_actions_keyboard(material_id: int, lang: str = "English") -> InlineKeyboardMarkup:
-    """Returns the action keyboard attached to an analyzed PDF document."""
     keyboard = [
         [
             InlineKeyboardButton(text="📖 Final Exam Study Mode", callback_data=f"pdf_act_learn_{material_id}"),
@@ -41,14 +41,45 @@ def get_pdf_actions_keyboard(material_id: int, lang: str = "English") -> InlineK
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+def get_exam_start_mcqs_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="▶️ Start 10 Practice Questions", callback_data="pdf_exam_start_mcqs")],
+        [InlineKeyboardButton(text="❌ Quit", callback_data="pdf_cancel")]
+    ])
+
+def get_exam_mcq_keyboard(question_num: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="A", callback_data=f"pdf_mcq_ans_{question_num}_A"),
+            InlineKeyboardButton(text="B", callback_data=f"pdf_mcq_ans_{question_num}_B"),
+            InlineKeyboardButton(text="C", callback_data=f"pdf_mcq_ans_{question_num}_C"),
+            InlineKeyboardButton(text="D", callback_data=f"pdf_mcq_ans_{question_num}_D")
+        ],
+        [
+            InlineKeyboardButton(text="❌ Quit Exam", callback_data="pdf_cancel")
+        ]
+    ])
+
+def get_exam_mcq_next_keyboard(question_num: int, total: int = 10) -> InlineKeyboardMarkup:
+    if question_num < total:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"➡️ Next Question ({question_num+1}/{total})", callback_data=f"pdf_mcq_next_{question_num}")]
+        ])
+    else:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📊 View Final Score & Reteach", callback_data="pdf_mcq_finish")]
+        ])
+
 def get_exam_topic_continue_keyboard(has_next: bool, next_topic_name: str = "") -> InlineKeyboardMarkup:
-    """Returns navigation buttons after grading a topic's 10-MCQ exam."""
     buttons = []
     if has_next:
         clean_name = (next_topic_name[:25] + "..") if len(next_topic_name) > 25 else next_topic_name
         buttons.append([InlineKeyboardButton(text=f"▶️ Next Topic: {clean_name}", callback_data="pdf_exam_next_topic")])
     buttons.append([
-        InlineKeyboardButton(text="📚 Another Chapter", callback_data="pdf_exam_another_chapter"),
+        InlineKeyboardButton(text="🔄 Retest Topic", callback_data="pdf_exam_retest_topic"),
+        InlineKeyboardButton(text="📚 Another Chapter", callback_data="pdf_exam_another_chapter")
+    ])
+    buttons.append([
         InlineKeyboardButton(text="🏁 Finish", callback_data="pdf_exam_finish")
     ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -56,7 +87,6 @@ def get_exam_topic_continue_keyboard(has_next: bool, next_topic_name: str = "") 
 @router.message(Command("pdf"), StateFilter(None))
 @router.message(F.text.in_(["📄 Study PDF", "📄 የፒዲኤፍ ጥናት", "📄 Qo'annoo PDF"]), StateFilter(None))
 async def start_pdf_study(message: Message, state: FSMContext, telegram_id: Optional[int] = None):
-    """Entrypoint for the PDF Study System."""
     tid = telegram_id or (message.from_user.id if message.from_user else None)
     if not tid:
         return
@@ -64,10 +94,8 @@ async def start_pdf_study(message: Message, state: FSMContext, telegram_id: Opti
     student = await student_service.get_student(tid)
     lang = student.preferred_language if student else "English"
     
-    # Check if student already has an active PDF
     active_mat = await pdf_service.get_active_material(tid)
     if active_mat:
-        # Prompt chapter selection for Final Exam Study Mode
         await state.set_state(PDFStates.waiting_for_chapter)
         await state.update_data(
             material_id=active_mat.id,
@@ -76,7 +104,7 @@ async def start_pdf_study(message: Message, state: FSMContext, telegram_id: Opti
         )
         
         prompt_text = (
-            f"📚 *Final Exam Study Mode: {active_mat.title or active_mat.filename}*\n"
+            f"📚 Final Exam Study Mode: {active_mat.title or active_mat.filename}*\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Which chapter(s) do you want to study?\n\n"
             f"💡 _(e.g., Chapter 1, Chapter 2 and 3, or All)_"
@@ -88,7 +116,6 @@ async def start_pdf_study(message: Message, state: FSMContext, telegram_id: Opti
         await safe_reply(message, prompt_text, reply_markup=kb)
         return
         
-    # Otherwise prompt for upload
     await state.set_state(PDFStates.waiting_for_pdf)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("btn_cancel", lang), callback_data="pdf_cancel")]
@@ -97,7 +124,6 @@ async def start_pdf_study(message: Message, state: FSMContext, telegram_id: Opti
 
 @router.callback_query(F.data == "menu_study_pdf", StateFilter(None))
 async def menu_study_pdf_callback(callback: CallbackQuery, state: FSMContext):
-    """Main menu trigger for PDF Study."""
     try:
         await callback.answer()
     except Exception:
@@ -106,7 +132,6 @@ async def menu_study_pdf_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "pdf_upload_new")
 async def pdf_upload_new_callback(callback: CallbackQuery, state: FSMContext):
-    """Triggers prompt to upload a new PDF file."""
     try:
         await callback.answer()
     except Exception:
@@ -123,7 +148,6 @@ async def pdf_upload_new_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "pdf_cancel")
 async def cancel_pdf_callback(callback: CallbackQuery, state: FSMContext):
-    """Cancels PDF FSM flow."""
     try:
         await callback.answer()
     except Exception:
@@ -136,8 +160,8 @@ async def cancel_pdf_callback(callback: CallbackQuery, state: FSMContext):
     await safe_edit(callback.message, t("btn_cancel", lang) + ": Study mode cancelled. Send /menu anytime.")
 
 @router.message(PDFStates.waiting_for_pdf, F.document)
+@router.message(StateFilter(None), F.document)
 async def process_pdf_document_upload(message: Message, state: FSMContext):
-    """Handles incoming PDF document uploads and directly prompts for chapter."""
     telegram_id = message.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
@@ -148,12 +172,10 @@ async def process_pdf_document_upload(message: Message, state: FSMContext):
         
     filename = doc.file_name or "document.pdf"
     
-    # 1. Validate extension
     if not filename.lower().endswith(".pdf"):
         await safe_reply(message, t("pdf_invalid_type", lang))
         return
         
-    # 2. Validate size
     if doc.file_size and doc.file_size > (config.MAX_FILE_SIZE_MB * 1024 * 1024):
         await safe_reply(message, t("pdf_size_error", lang))
         return
@@ -161,13 +183,11 @@ async def process_pdf_document_upload(message: Message, state: FSMContext):
     processing_msg = await message.answer(t("pdf_processing", lang))
     
     try:
-        # Download bytes
         file = await message.bot.get_file(doc.file_id)
         file_bytes_io = io.BytesIO()
         await message.bot.download_file(file.file_path, file_bytes_io)
         pdf_bytes = file_bytes_io.getvalue()
         
-        # Process and save PDF
         material = await pdf_service.process_and_save_pdf(
             telegram_id=telegram_id,
             pdf_bytes=pdf_bytes,
@@ -176,7 +196,6 @@ async def process_pdf_document_upload(message: Message, state: FSMContext):
             student=student
         )
         
-        # Transition to chapter selection for Final Exam Study Mode
         await state.set_state(PDFStates.waiting_for_chapter)
         await state.update_data(
             material_id=material.id,
@@ -190,7 +209,7 @@ async def process_pdf_document_upload(message: Message, state: FSMContext):
             pass
             
         prompt_text = (
-            f"📚 *Final Exam Study Mode: {material.title or material.filename}*\n"
+            f"📚 Final Exam Study Mode: {material.title or material.filename}*\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Which chapter(s) do you want to study?\n\n"
             f"💡 _(e.g., Chapter 1, Chapters 2 and 3, or All)_"
@@ -200,20 +219,252 @@ async def process_pdf_document_upload(message: Message, state: FSMContext):
         ])
         await safe_reply(message, prompt_text, reply_markup=kb)
         
+    except ValueError as ve:
+        await safe_edit(processing_msg, str(ve))
     except Exception as e:
         logging.error(f"Error processing PDF upload: {e}", exc_info=True)
         await safe_edit(processing_msg, t("ai_error", lang))
 
-@router.message(PDFStates.waiting_for_chapter)
-async def process_exam_chapter_selection(message: Message, state: FSMContext):
+async def execute_grounded_chapter_study(
+    message: Message,
+    state: FSMContext,
+    telegram_id: int,
+    chapter_name: str,
+    extracted_text: str,
+    filename: str,
+    student: Optional[StudentModel] = None
+):
     """
-    Receives chosen chapter(s), starts Final Exam Study Mode,
-    and presents Step 1 (Short Notes) + Step 2 (10 MCQs) for Topic 1.
+    Executes grounded chapter study:
+    1. Sends mandatory exam study greeting
+    2. Extracts ordered topic titles
+    3. Starts learning session
+    4. Generates Step 1 (Short Notes) & Step 2 (10 MCQs)
+    5. Sets PDFStates.waiting_for_exam_answers
     """
-    telegram_id = message.from_user.id
-    student = await student_service.get_student(telegram_id)
+    if not student:
+        student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
     
+    thinking = await message.answer(f"📖 Preparing Chapter {chapter_name} Notes & Practice Questions...")
+    
+    try:
+        topics = await gemini_service.generate_exam_chapter_topics(
+            material_text=extracted_text,
+            chapter_name=chapter_name,
+            lang=lang
+        )
+        if not topics:
+            topics = [f"{chapter_name} - Core Concepts"]
+            
+        current_topic = topics[0]
+        session = await learning_service.start_session(
+            telegram_id=telegram_id,
+            subject=f"Final Exam: {filename}",
+            topic=f"{chapter_name} → {current_topic}"
+        )
+        lesson_text, mcq_list = await gemini_service.generate_exam_topic_lesson(
+            material_text=extracted_text,
+            chapter_name=chapter_name,
+            topic_name=current_topic,
+            lang=lang
+        )
+        await state.set_state(PDFStates.waiting_for_exam_answers)
+        await state.update_data(
+            chapter_name=chapter_name,
+            filename=filename,
+            extracted_text=extracted_text,
+            topics_list=topics,
+            current_topic_index=0,
+            current_topic_name=current_topic,
+            current_mcqs=mcq_list,
+            current_question_idx=0,
+            student_answers={},
+            session_id=session.id
+        )
+        
+        try:
+            await thinking.delete()
+        except Exception:
+            pass
+            
+        await safe_reply(message, lesson_text, reply_markup=get_exam_start_mcqs_keyboard())
+        
+    except Exception as e:
+        logging.error(f"Error starting exam chapter study: {e}", exc_info=True)
+        await safe_edit(thinking, t("ai_error", lang))
+
+async def render_exam_question(target: Message | CallbackQuery, data: dict, question_idx: int):
+    mcqs = data.get("current_mcqs", [])
+    total = len(mcqs)
+    if question_idx >= total:
+        await show_exam_final_results(target, data)
+        return
+        
+    q = mcqs[question_idx]
+    q_num = question_idx + 1
+    
+    card = (
+        f"❓ Exam Question {q_num} of {total}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{q['question']}\n\n"
+        f"A) {q['option_a']}\n"
+        f"B) {q['option_b']}\n"
+        f"C) {q['option_c']}\n"
+        f"D) {q['option_d']}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"💡 Tap your answer choice below:"
+    )
+    kb = get_exam_mcq_keyboard(q_num)
+    if isinstance(target, CallbackQuery) or hasattr(target, "message"):
+        msg = target.message if hasattr(target, "message") else target
+        await safe_edit(msg, card, reply_markup=kb)
+    else:
+        await safe_reply(target, card, reply_markup=kb)
+
+async def show_exam_final_results(target: Message | CallbackQuery, data: dict):
+    mcqs = data.get("current_mcqs", [])
+    student_answers = data.get("student_answers", {})
+    total = len(mcqs)
+    score = 0
+    detailed_lines = []
+    weak_points = []
+    
+    for idx, q in enumerate(mcqs, 1):
+        ans = student_answers.get(str(idx), student_answers.get(idx, "-"))
+        corr = q.get("correct_answer", "A")
+        is_correct = (ans == corr)
+        if is_correct:
+            score += 1
+            detailed_lines.append(f"• Q{idx}: ✅ Correct (Your answer: *{ans}*)")
+        else:
+            detailed_lines.append(f"• Q{idx}: ❌ Incorrect (Your answer: *{ans}* | Correct: *{corr}*)\n  _{q.get('explanation', '')}_")
+            weak_points.append(f"Q{idx} ({q.get('question')[:40]}..)")
+            
+    current_topic_name = data.get("current_topic_name", "Current Topic")
+    topics_list = data.get("topics_list", [])
+    current_topic_index = data.get("current_topic_index", 0)
+    chapter_name = data.get("chapter_name", "Chapter")
+    has_next = (current_topic_index + 1) < len(topics_list)
+    next_topic_name = topics_list[current_topic_index + 1] if has_next else ""
+    
+    score_pct = int((score / total) * 100) if total > 0 else 0
+    grade_status = "🌟 Outstanding!" if score >= 8 else ("👍 Good Effort — Review Weak Points" if score >= 6 else "⚠️ Needs Review & Practice")
+    
+    results_text = (
+        f"📊 Exam Checkpoint: {current_topic_name}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🏆 Score: {score}/{total} ({score_pct}%) — {grade_status}\n\n"
+        f"Detailed Answers Check:\n"
+        + "\n".join(detailed_lines)
+    )
+    
+    if weak_points:
+        results_text += f"\n\n━━━━━━━━━━━━━━━━━━━━\n📌 Concepts to Review:\n• " + "\n• ".join(weak_points)
+    else:
+        results_text += f"\n\n━━━━━━━━━━━━━━━━━━━━\n🎉 Mastery Achieved: You answered all questions correctly!"
+        
+    if not has_next:
+        results_text += (
+            f"\n\n━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎉 Chapter Completed!\n"
+            f"You have finished all topics in {chapter_name}! Excellent work preparing for your final exam."
+        )
+        
+    kb = get_exam_topic_continue_keyboard(has_next, next_topic_name)
+    if isinstance(target, CallbackQuery) or hasattr(target, "message"):
+        msg = target.message if hasattr(target, "message") else target
+        await safe_edit(msg, results_text, reply_markup=kb)
+    else:
+        await safe_reply(target, results_text, reply_markup=kb)
+
+@router.callback_query(F.data == "pdf_exam_start_mcqs")
+async def pdf_exam_start_mcqs_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    data = await state.get_data()
+    await state.update_data(current_question_idx=0, student_answers={})
+    data["current_question_idx"] = 0
+    data["student_answers"] = {}
+    await render_exam_question(callback, data, 0)
+
+@router.callback_query(F.data.startswith("pdf_mcq_ans_"))
+async def pdf_mcq_ans_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    parts = callback.data.split("pdf_mcq_ans_")[1].split("_")
+    q_num = int(parts[0])
+    selected_opt = parts[1]
+    
+    data = await state.get_data()
+    mcqs = data.get("current_mcqs", [])
+    student_answers = data.get("student_answers", {})
+    student_answers[str(q_num)] = selected_opt
+    await state.update_data(student_answers=student_answers)
+    
+    q_idx = q_num - 1
+    if 0 <= q_idx < len(mcqs):
+        q = mcqs[q_idx]
+        corr = q.get("correct_answer", "A")
+        is_correct = (selected_opt.upper() == corr.upper())
+        status_line = "✅ Correct!" if is_correct else f"❌ Incorrect. Correct Answer: {corr}"
+        
+        feedback_card = (
+            f"❓ Question {q_num} of {len(mcqs)}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"{q['question']}\n\n"
+            f"Your Answer: Option {selected_opt}\n"
+            f"{status_line}\n\n"
+            f"💡 Explanation:\n{q.get('explanation', '')}\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
+        )
+        await safe_edit(callback.message, feedback_card, reply_markup=get_exam_mcq_next_keyboard(q_num, len(mcqs)))
+    else:
+        data["student_answers"] = student_answers
+        await show_exam_final_results(callback, data)
+
+@router.callback_query(F.data.startswith("pdf_mcq_next_"))
+async def pdf_mcq_next_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    q_num = int(callback.data.split("pdf_mcq_next_")[1])
+    next_idx = q_num
+    data = await state.get_data()
+    await state.update_data(current_question_idx=next_idx)
+    data["current_question_idx"] = next_idx
+    await render_exam_question(callback, data, next_idx)
+
+@router.callback_query(F.data == "pdf_mcq_finish")
+async def pdf_mcq_finish_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    data = await state.get_data()
+    await show_exam_final_results(callback, data)
+
+@router.callback_query(F.data == "pdf_exam_retest_topic")
+async def pdf_exam_retest_topic_callback(callback: CallbackQuery, state: FSMContext):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    data = await state.get_data()
+    await state.update_data(current_question_idx=0, student_answers={})
+    data["current_question_idx"] = 0
+    data["student_answers"] = {}
+    await render_exam_question(callback, data, 0)
+
+@router.message(PDFStates.waiting_for_chapter)
+async def process_exam_chapter_selection(message: Message, state: FSMContext):
+    telegram_id = message.from_user.id
+    student = await student_service.get_student(telegram_id)
     chapter_input = message.text.strip() if message.text else "Chapter 1"
     data = await state.get_data()
     filename = data.get("filename", "study document")
@@ -225,81 +476,53 @@ async def process_exam_chapter_selection(message: Message, state: FSMContext):
             extracted_text = active_mat.extracted_text
             filename = active_mat.title or active_mat.filename
             
-    # Send mandatory study greeting
-    greeting_text = (
-        f"Let's study together, starting from Chapter {chapter_input} in {filename}. "
-        f"I am studying for my final exam. We will study step by step, following the content and order of the attached file."
+    await execute_grounded_chapter_study(
+        message=message,
+        state=state,
+        telegram_id=telegram_id,
+        chapter_name=chapter_input,
+        extracted_text=extracted_text,
+        filename=filename,
+        student=student
     )
-    await safe_reply(message, greeting_text)
-    
-    thinking = await message.answer("📖 Preparing Step 1 (Short Notes) & Step 2 (10 Exam Questions)...")
-    
-    try:
-        # 1. Extract ordered topics in the chapter
-        topics = await gemini_service.generate_exam_chapter_topics(
-            material_text=extracted_text,
-            chapter_name=chapter_input,
-            lang=lang
-        )
-        if not topics:
-            topics = [f"{chapter_input} - Core Concepts"]
-            
-        current_topic = topics[0]
-        
-        # 2. Start a learning session
-        session = await learning_service.start_session(
-            telegram_id=telegram_id,
-            subject=f"Final Exam: {filename}",
-            topic=f"{chapter_input} → {current_topic}"
-        )
-        
-        # 3. Generate Step 1 (Short Notes) + Step 2 (10 MCQs)
-        lesson_text, mcq_list = await gemini_service.generate_exam_topic_lesson(
-            material_text=extracted_text,
-            chapter_name=chapter_input,
-            topic_name=current_topic,
-            lang=lang
-        )
-        
-        # 4. Save state for answers evaluation
-        await state.set_state(PDFStates.waiting_for_exam_answers)
-        await state.update_data(
-            chapter_name=chapter_input,
-            filename=filename,
-            extracted_text=extracted_text,
-            topics_list=topics,
-            current_topic_index=0,
-            current_topic_name=current_topic,
-            current_mcqs=mcq_list,
-            session_id=session.id
-        )
-        
-        try:
-            await thinking.delete()
-        except Exception:
-            pass
-            
-        await safe_reply(message, lesson_text)
-        
-    except Exception as e:
-        logging.error(f"Error starting exam chapter study: {e}", exc_info=True)
-        await safe_edit(thinking, t("ai_error", lang))
 
 @router.message(PDFStates.waiting_for_exam_answers)
 async def process_exam_answers(message: Message, state: FSMContext):
-    """
-    Step 3: Checks student answers for the 10 MCQs, provides corrections & re-teaching,
-    and offers button to continue to the next topic.
-    """
     telegram_id = message.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
-    
     student_answers = message.text.strip() if message.text else ""
     if not student_answers:
         return
         
     data = await state.get_data()
+    
+    clean_ans = student_answers.upper().strip().replace(".", "")
+    if clean_ans in ["A", "B", "C", "D"]:
+        q_idx = data.get("current_question_idx", 0)
+        q_num = q_idx + 1
+        mcqs = data.get("current_mcqs", [])
+        student_answers_dict = data.get("student_answers", {})
+        student_answers_dict[str(q_num)] = clean_ans
+        await state.update_data(student_answers=student_answers_dict)
+        
+        if 0 <= q_idx < len(mcqs):
+            q = mcqs[q_idx]
+            corr = q.get("correct_answer", "A")
+            is_correct = (clean_ans == corr)
+            status_line = "✅ Correct!" if is_correct else f"❌ Incorrect. Correct Answer: {corr}"
+            feedback_card = (
+                f"❓ Question {q_num} of {len(mcqs)}\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"{q['question']}\n\n"
+                f"Your Answer: Option {clean_ans}\n"
+                f"{status_line}\n\n"
+                f"Explanation:\n{q.get('explanation', '')}\n"
+                f"━━━━━━━━━━━━━━━━━━━━"
+            )
+            await safe_reply(message, feedback_card, reply_markup=get_exam_mcq_next_keyboard(q_num, len(mcqs)))
+            return
+            
     current_topic_name = data.get("current_topic_name", "Current Topic")
     current_mcqs = data.get("current_mcqs", [])
     extracted_text = data.get("extracted_text", "")
@@ -322,20 +545,20 @@ async def process_exam_answers(message: Message, state: FSMContext):
         next_topic_name = topics_list[current_topic_index + 1] if has_next else ""
         
         feedback_text = (
-            f"📊 *Exam Checkpoint: {current_topic_name}*\n"
+            f"Exam Checkpoint: {current_topic_name}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🏆 *Score:* {score}/10\n\n"
+            f"🏆 Score: {score}/10\n\n"
             f"{detailed_results}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"💡 *Key Review & Corrections:*\n\n"
+            f"💡 Key Review & Corrections:\n\n"
             f"{corrections_and_reteach}"
         )
         
         if not has_next:
             feedback_text += (
                 f"\n\n━━━━━━━━━━━━━━━━━━━━\n"
-                f"🎉 *Chapter Completed!*\n"
-                f"You have finished all topics in *{chapter_name}*! Excellent work preparing for your final exam."
+                f"🎉 Chapter Completed!\n"
+                f"You have finished all topics in {chapter_name}! Excellent work preparing for your final exam."
             )
             
         try:
@@ -355,9 +578,6 @@ async def process_exam_answers(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "pdf_exam_next_topic")
 async def pdf_exam_next_topic_callback(callback: CallbackQuery, state: FSMContext):
-    """
-    Step 4: Advances to the next topic in the selected chapter.
-    """
     try:
         await callback.answer()
     except Exception:
@@ -385,7 +605,6 @@ async def pdf_exam_next_topic_callback(callback: CallbackQuery, state: FSMContex
     thinking = await callback.message.answer(f"📖 Loading Step 1 Notes & 10 Questions for: {next_topic}...")
     
     try:
-        # Start learning session for next topic
         session = await learning_service.start_session(
             telegram_id=telegram_id,
             subject=f"Final Exam: {filename}",
@@ -403,6 +622,8 @@ async def pdf_exam_next_topic_callback(callback: CallbackQuery, state: FSMContex
             current_topic_index=current_topic_index,
             current_topic_name=next_topic,
             current_mcqs=mcq_list,
+            current_question_idx=0,
+            student_answers={},
             session_id=session.id
         )
         
@@ -411,7 +632,7 @@ async def pdf_exam_next_topic_callback(callback: CallbackQuery, state: FSMContex
         except Exception:
             pass
             
-        await safe_reply(callback, lesson_text)
+        await safe_reply(callback, lesson_text, reply_markup=get_exam_start_mcqs_keyboard())
         
     except Exception as e:
         logging.error(f"Error loading next exam topic: {e}", exc_info=True)
@@ -419,7 +640,6 @@ async def pdf_exam_next_topic_callback(callback: CallbackQuery, state: FSMContex
 
 @router.callback_query(F.data == "pdf_exam_another_chapter")
 async def pdf_exam_another_chapter_callback(callback: CallbackQuery, state: FSMContext):
-    """Prompts student to select another chapter from the active material."""
     try:
         await callback.answer()
     except Exception:
@@ -431,12 +651,11 @@ async def pdf_exam_another_chapter_callback(callback: CallbackQuery, state: FSMC
     await state.set_state(PDFStates.waiting_for_chapter)
     await safe_reply(
         callback,
-        "📚 *Which chapter(s) do you want to study next?*\n\n_(e.g., Chapter 2, Chapter 3, or All)_"
+        "📚 Which chapter(s) do you want to study next?\n\n_(e.g., Chapter 2, Chapter 3, or All)_"
     )
 
 @router.callback_query(F.data == "pdf_exam_finish")
 async def pdf_exam_finish_callback(callback: CallbackQuery, state: FSMContext):
-    """Concludes the final exam study session."""
     try:
         await callback.answer()
     except Exception:
@@ -452,7 +671,6 @@ async def pdf_exam_finish_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("pdf_act_learn_"), StateFilter(None))
 async def pdf_action_learn_callback(callback: CallbackQuery, state: FSMContext):
-    """Triggers Final Exam Study Mode for the document."""
     try:
         await callback.answer()
     except Exception:
@@ -474,10 +692,10 @@ async def pdf_action_learn_callback(callback: CallbackQuery, state: FSMContext):
     )
     
     prompt_text = (
-        f"📚 *Final Exam Study Mode: {active_mat.title or active_mat.filename}*\n"
+        f"📚 Final Exam Study Mode: {active_mat.title or active_mat.filename}\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"Which chapter(s) do you want to study?\n\n"
-        f"💡 _(e.g., Chapter 1, Chapters 2 and 3, or All)_"
+        f"💡 (e.g., Chapter 1, Chapters 2 and 3, or All)"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=t("btn_cancel", lang), callback_data="pdf_cancel")]
@@ -486,7 +704,6 @@ async def pdf_action_learn_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("pdf_act_sum_"), StateFilter(None))
 async def pdf_action_summary_callback(callback: CallbackQuery):
-    """Displays full summary of the document."""
     try:
         await callback.answer()
     except Exception:
@@ -501,7 +718,7 @@ async def pdf_action_summary_callback(callback: CallbackQuery):
         return
         
     summary_text = (
-        f"📖 *Summary: {material.title or material.filename}*\n"
+        f"📖 Summary: {material.title or material.filename}\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
         f"{material.summary or 'No summary available.'}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -511,7 +728,6 @@ async def pdf_action_summary_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("pdf_act_ask_"), StateFilter(None))
 async def pdf_action_ask_callback(callback: CallbackQuery, state: FSMContext):
-    """Triggers Grounded PDF Q&A mode."""
     try:
         await callback.answer()
     except Exception:
@@ -536,7 +752,6 @@ async def pdf_action_ask_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.message(PDFStates.waiting_for_pdf_question)
 async def process_pdf_question(message: Message, state: FSMContext):
-    """Answers student questions strictly grounded in the uploaded document."""
     telegram_id = message.from_user.id
     student = await student_service.get_student(telegram_id)
     lang = student.preferred_language if student else "English"
@@ -577,7 +792,6 @@ async def process_pdf_question(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("pdf_act_quiz_"), StateFilter(None))
 async def pdf_action_quiz_callback(callback: CallbackQuery):
-    """Starts a quiz grounded in the PDF document."""
     try:
         await callback.answer()
     except Exception:
@@ -603,7 +817,6 @@ async def pdf_action_quiz_callback(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("pdf_act_test_"), StateFilter(None))
 async def pdf_action_test_callback(callback: CallbackQuery, state: FSMContext):
-    """Starts a written test grounded in the PDF document."""
     try:
         await callback.answer()
     except Exception:

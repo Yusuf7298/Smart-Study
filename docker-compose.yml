@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  ethio-smart-study-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ethio_smart_study_bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      # Persistent local storage for PDFs, uploaded receipts, and SQLite fallback
+      - bot_data:/app/data
+      - bot_db:/app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  bot_data:
+  bot_db:
