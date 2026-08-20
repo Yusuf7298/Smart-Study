@@ -31,8 +31,8 @@ def get_materials_keyboard(materials, lang: str = "English") -> InlineKeyboardMa
     ])
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
-@router.message(Command("materials"), StateFilter(None))
-@router.message(F.text.in_(["📎 My Materials", "📎 የእኔ ማቴሪያሎች", "📎 Meeshaalee Koo"]), StateFilter(None))
+@router.message(Command("materials"))
+@router.message(F.text.in_(["📎 My Materials", "📎 የእኔ ማቴሪያሎች", "📎 Meeshaalee Koo"]))
 async def show_materials_command(message: Message, state: FSMContext):
     await state.clear()
     telegram_id = message.from_user.id if message.from_user else None

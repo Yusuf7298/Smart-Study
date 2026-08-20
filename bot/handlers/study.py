@@ -109,9 +109,10 @@ def get_topics_keyboard(subject: str, chapter_num: str, lang: str = "English") -
     ])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-@router.message(Command("study"), StateFilter(None))
-@router.message(F.text.in_(["📚 Study", "📚 አጥና", "📚 Qo'annoo", "📚 Qo'adhu"]), StateFilter(None))
+@router.message(Command("study"))
+@router.message(F.text.in_(["📚 Study", "📚 አጥና", "📚 Qo'annoo", "📚 Qo'adhu"]))
 async def start_study_mode(message: Message, state: FSMContext):
+    await state.clear()
     telegram_id = message.from_user.id if message.from_user else None
     if not telegram_id:
         return
@@ -127,8 +128,9 @@ async def start_study_mode(message: Message, state: FSMContext):
         reply_markup=get_registered_subjects_keyboard(registered_courses, lang)
     )
 
-@router.callback_query(F.data == "menu_study", StateFilter(None))
+@router.callback_query(F.data == "menu_study")
 async def menu_study_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     try:
         await callback.answer()
     except Exception:

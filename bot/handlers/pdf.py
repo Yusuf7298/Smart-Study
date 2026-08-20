@@ -84,9 +84,10 @@ def get_exam_topic_continue_keyboard(has_next: bool, next_topic_name: str = "") 
     ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-@router.message(Command("pdf"), StateFilter(None))
-@router.message(F.text.in_(["📄 Study PDF", "📄 የፒዲኤፍ ጥናት", "📄 Qo'annoo PDF"]), StateFilter(None))
+@router.message(Command("pdf"))
+@router.message(F.text.in_(["📄 Study PDF", "📄 የፒዲኤፍ ጥናት", "📄 Qo'annoo PDF"]))
 async def start_pdf_study(message: Message, state: FSMContext, telegram_id: Optional[int] = None):
+    await state.clear()
     tid = telegram_id or (message.from_user.id if message.from_user else None)
     if not tid:
         return
@@ -122,8 +123,9 @@ async def start_pdf_study(message: Message, state: FSMContext, telegram_id: Opti
     ])
     await safe_reply(message, t("pdf_ask_upload", lang), reply_markup=kb)
 
-@router.callback_query(F.data == "menu_study_pdf", StateFilter(None))
+@router.callback_query(F.data == "menu_study_pdf")
 async def menu_study_pdf_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     try:
         await callback.answer()
     except Exception:

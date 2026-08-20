@@ -136,9 +136,10 @@ async def clear_cancel_callback(callback: CallbackQuery):
     await safe_edit(callback.message, "❌ Clear chat cancelled.") # type: ignore
     await callback.answer()
 
-@router.message(F.text.in_(["🤖 AI Tutor", "🤖 AI አስተማሪ", "🤖 Barsiisaa AI"]), StateFilter(None))
-async def ai_tutor_menu_trigger(message: Message):
+@router.message(F.text.in_(["🤖 AI Tutor", "🤖 AI አስተማሪ", "🤖 Barsiisaa AI"]))
+async def ai_tutor_menu_trigger(message: Message, state: FSMContext):
     """Greeting prompt when AI Tutor button is clicked."""
+    await state.clear()
     telegram_id = message.from_user.id if message.from_user else None
     student = await student_service.get_student(telegram_id) if telegram_id else None
     lang = student.preferred_language if student else "English"
@@ -149,14 +150,20 @@ async def ai_tutor_menu_trigger(message: Message):
         "Ask me any question or homework problem! I'll guide you step-by-step to understand the solution."
     )
 
-@router.message(StateFilter(None))
-async def chat(message: Message):
+@router.message()
+async def chat(message: Message, state: Optional[FSMContext] = None):
     if not message.text:
         return
 
     # Ignore command messages
     if message.text.startswith("/"):
         return
+
+    if state:
+        current_state = await state.get_state()
+        if current_state and (current_state.startswith("RegistrationStates:") or current_state.startswith("AdminStates:")):
+            return
+        await state.clear()
 
     telegram_id = message.from_user.id if message.from_user else None
     if not telegram_id:

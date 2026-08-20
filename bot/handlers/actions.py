@@ -22,9 +22,11 @@ router = Router()
 class ActionStates(StatesGroup):
     waiting_for_test_answer = State()
 
-@router.message(Command("test"), StateFilter(None))
-@router.message(F.text.in_(["📝 Written Test", "📝 የጽሁፍ ፈተና", "📝 Qormaata Barreeffamaa"]), StateFilter(None))
-async def test_start(message: Message, state: FSMContext, telegram_id: Optional[int] = None):
+@router.message(Command("test"))
+@router.message(F.text.in_(["📝 Written Test", "📝 የጽሁፍ ፈተና", "📝 Qormaata Barreeffamaa"]))
+async def test_start(message: Message, state: Optional[FSMContext] = None, telegram_id: Optional[int] = None):
+    if state:
+        await state.clear()
     tid = telegram_id or (message.from_user.id if message.from_user else None)
     if not tid:
         return
@@ -75,14 +77,15 @@ async def test_start(message: Message, state: FSMContext, telegram_id: Optional[
             prompt, types_history, student, learning_session
         )
         
-        await state.set_state(ActionStates.waiting_for_test_answer)
-        await state.update_data(
-            test_questions=test_content,
-            session_id=learning_session.id,
-            subject=learning_session.subject,
-            topic=learning_session.topic,
-            telegram_id=tid
-        )
+        if state:
+            await state.set_state(ActionStates.waiting_for_test_answer)
+            await state.update_data(
+                test_questions=test_content,
+                session_id=learning_session.id,
+                subject=learning_session.subject,
+                topic=learning_session.topic,
+                telegram_id=tid
+            )
         
         await safe_edit(
             thinking,
@@ -97,8 +100,8 @@ async def test_start(message: Message, state: FSMContext, telegram_id: Optional[
         logging.error(f"Error starting test: {e}", exc_info=True)
         await safe_edit(thinking, "⚠️ Failed to prepare test questions. Please try again in a moment.")
 
-@router.callback_query(F.data == "action_test", StateFilter(None))
-@router.callback_query(F.data == "menu_test", StateFilter(None))
+@router.callback_query(F.data == "action_test")
+@router.callback_query(F.data == "menu_test")
 async def action_test_callback(callback: CallbackQuery, state: FSMContext):
     try:
         await callback.answer()
@@ -112,24 +115,23 @@ async def process_test_answer(message: Message, state: FSMContext):
     if not telegram_id:
         return
         
-    student = await student_service.get_student(telegram_id)
-    lang = student.preferred_language if student else "English"
-    learning_session = await learning_service.get_active_session(telegram_id)
-    
     data = await state.get_data()
-    questions = data.get("test_questions", "3 questions")
-    subject = data.get("subject", learning_session.subject if learning_session else "General")
-    topic = data.get("topic", learning_session.topic if learning_session else "Overview")
-    session_id = data.get("session_id", learning_session.id if learning_session else None)
-    await state.clear()
+    test_questions = data.get("test_questions", "")
+    learning_session_id = data.get("session_id")
+    subject = data.get("subject", "General")
+    topic = data.get("topic", "General")
     
-    thinking = await message.answer(t("test_evaluating", lang))
+    student = await student_service.get_student(telegram_id)
+    lang = student.preferred_language or "English" if student else "English"
+    
+    thinking = await message.answer("📊 Grading your written test answers...")
     
     try:
+        answers_text = message.text or ""
         score, letter_grade, strengths, weaknesses, corrections, recommendations, feedback = (
             await gemini_service.grade_written_test(
-                questions_text=questions,
-                student_answers=message.text or "",
+                questions_text=test_questions,
+                student_answers=answers_text,
                 student=student, # type: ignore
                 subject=subject,
                 topic=topic
@@ -139,19 +141,18 @@ async def process_test_answer(message: Message, state: FSMContext):
         await asyncio.to_thread(
             test_repo.save_test_result,
             telegram_id=telegram_id,
+            learning_session_id=learning_session_id,
             subject=subject,
             topic=topic,
-            questions_text=questions,
-            student_answers=message.text or "",
+            questions_text=test_questions,
+            student_answers=answers_text,
             score=score,
             max_score=10,
             letter_grade=letter_grade,
-            feedback=feedback,
-            learning_session_id=session_id
+            feedback=feedback
         )
         
-        await conversation_service.add_message(telegram_id, "user", f"[Test Answers]: {message.text}")
-        await conversation_service.add_message(telegram_id, "assistant", f"[Test Grading]: {feedback}")
+        await state.clear()
         
         await safe_edit(
             thinking,
@@ -166,11 +167,13 @@ async def process_test_answer(message: Message, state: FSMContext):
         
     except Exception as e:
         logging.error(f"Error grading test: {e}", exc_info=True)
-        await safe_edit(thinking, "⚠️ Failed to grade your answers. Please try again.")
+        await safe_edit(thinking, "⚠️ Failed to grade your test answers. Please try again.")
 
-@router.message(Command("short_note"), StateFilter(None))
-@router.message(F.text.in_(["📖 Short Notes", "📖 አጫጭር ማስታወሻዎች", "📖 Yaadannoo Gabaabaa"]), StateFilter(None))
-async def short_note_start(message: Message, telegram_id: Optional[int] = None):
+@router.message(Command("short_note"))
+@router.message(F.text.in_(["📖 Short Notes", "📖 አጫጭር ማስታወሻዎች", "📖 Yaadannoo Gabaabaa"]))
+async def short_note_start(message: Message, state: Optional[FSMContext] = None, telegram_id: Optional[int] = None):
+    if state:
+        await state.clear()
     tid = telegram_id or (message.from_user.id if message.from_user else None)
     if not tid:
         return
@@ -241,19 +244,22 @@ async def short_note_start(message: Message, telegram_id: Optional[int] = None):
         logging.error(f"Error generating short note: {e}", exc_info=True)
         await safe_edit(thinking, "⚠️ Failed to generate short notes. Please try again.")
 
-@router.callback_query(F.data == "action_note", StateFilter(None))
-@router.callback_query(F.data == "menu_notes", StateFilter(None))
-async def action_note_callback(callback: CallbackQuery):
+@router.callback_query(F.data == "action_note")
+@router.callback_query(F.data == "menu_notes")
+async def action_note_callback(callback: CallbackQuery, state: FSMContext):
     """Processes the short note callback button."""
+    await state.clear()
     try:
         await callback.answer()
     except Exception:
         pass
-    await short_note_start(callback.message, telegram_id=callback.from_user.id)
+    await short_note_start(callback.message, state, telegram_id=callback.from_user.id)
 
-@router.message(Command("personalize"), StateFilter(None))
-async def personalize_start(message: Message, telegram_id: Optional[int] = None):
+@router.message(Command("personalize"))
+async def personalize_start(message: Message, state: Optional[FSMContext] = None, telegram_id: Optional[int] = None):
     """Displays the personalization configuration card."""
+    if state:
+        await state.clear()
     tid = telegram_id or (message.from_user.id if message.from_user else None)
     if not tid:
         return
@@ -277,15 +283,9 @@ async def personalize_start(message: Message, telegram_id: Optional[int] = None)
         reply_markup=kb
     )
 
-@router.callback_query(F.data.in_(["action_personalize", "menu_personalize"]), StateFilter(None))
-async def action_personalize_callback(callback: CallbackQuery):
+@router.callback_query(F.data.in_(["action_personalize", "menu_personalize"]))
+async def action_personalize_callback(callback: CallbackQuery, state: FSMContext):
     """Handles personalization callback button."""
-    try:
-        await callback.answer()
-    except Exception:
-        pass
-    await personalize_start(callback.message, telegram_id=callback.from_user.id)
-
 @router.callback_query(F.data == "menu_language", StateFilter(None))
 async def menu_language_callback(callback: CallbackQuery):
     try:

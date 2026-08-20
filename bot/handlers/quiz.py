@@ -58,9 +58,10 @@ async def send_next_quiz_question(message: Message, quiz_session) -> None:
         logging.error(f"Error generating question for quiz {quiz_session.id}: {e}", exc_info=True)
         await safe_edit(thinking_msg, t("ai_error", lang))
 
-@router.callback_query(F.data == "action_quiz", StateFilter(None))
-@router.callback_query(F.data == "menu_quiz", StateFilter(None))
-async def action_quiz_callback(callback: CallbackQuery):
+@router.callback_query(F.data == "action_quiz")
+@router.callback_query(F.data == "menu_quiz")
+async def action_quiz_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     try:
         await callback.answer()
     except Exception:
@@ -103,10 +104,12 @@ async def action_quiz_callback(callback: CallbackQuery):
     )
     await send_next_quiz_question(callback.message, quiz_session)
 
-@router.message(Command("quiz"), StateFilter(None))
-@router.message(F.text.in_(["❓ Quiz", "❓ ጥያቄና መልስ (Quiz)", "❓ Gaaffilee (Quiz)"]), StateFilter(None))
-async def quiz_start(message: Message):
+@router.message(Command("quiz"))
+@router.message(F.text.in_(["❓ Quiz", "❓ ጥያቄና መልስ (Quiz)", "❓ Gaaffilee (Quiz)"]))
+async def quiz_start(message: Message, state: Optional[FSMContext] = None):
     """Handles the /quiz command."""
+    if state:
+        await state.clear()
     telegram_id = message.from_user.id if message.from_user else None
     if not telegram_id:
         return
