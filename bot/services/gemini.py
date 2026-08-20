@@ -12,12 +12,12 @@ _clients: List[genai.Client] = []
 for k in (GEMINI_API_KEYS or ([GEMINI_API_KEY] if GEMINI_API_KEY else [])):
     if k:
         try:
-            _clients.append(genai.Client(api_key=k))
+            _clients.append(genai.Client(api_key=k, http_options={"api_version": "v1"}))
         except Exception as e:
             logging.error(f"Failed initializing Gemini client for key: {e}")
 
 if not _clients and GEMINI_API_KEY:
-    _clients = [genai.Client(api_key=GEMINI_API_KEY)]
+    _clients = [genai.Client(api_key=GEMINI_API_KEY, http_options={"api_version": "v1"})]
 
 _current_key_idx = 0
 
@@ -25,7 +25,7 @@ def get_clients_in_rotation() -> List[genai.Client]:
     """Returns list of clients starting with the current primary key and wrapping around."""
     global _current_key_idx
     if not _clients:
-        return [genai.Client(api_key=GEMINI_API_KEY)]
+        return [genai.Client(api_key=GEMINI_API_KEY, http_options={"api_version": "v1"})]
     n = len(_clients)
     return [_clients[(i + _current_key_idx) % n] for i in range(n)]
 
@@ -47,7 +47,7 @@ def mark_key_failed(client_instance: genai.Client, error_msg: str):
         pass
 
 # Default client for legacy access
-client = _clients[0] if _clients else genai.Client(api_key=GEMINI_API_KEY)
+client = _clients[0] if _clients else genai.Client(api_key=GEMINI_API_KEY, http_options={"api_version": "v1"})
 
 MASTER_AI_TUTOR_PROMPT_TEMPLATE = """# ETHIO SMART STUDY — MASTER AI TUTOR PROMPT
 
