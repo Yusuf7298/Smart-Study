@@ -11,7 +11,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MONGO_URI = os.getenv("MONGO_URI", "") or os.getenv("MONGODB_URI", "")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ethio_smart_study")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "tutor_bot.db")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 raw_admins = os.getenv("ADMIN_IDS", "8223004316")
 ADMIN_IDS = []
