@@ -149,8 +149,11 @@ async def download_file_bytes(
         try:
             file = await message.bot.get_file(file_id)
             buf = io.BytesIO()
-            await message.bot.download_file(file.file_path, buf)
-            return buf.getvalue()
+            res = await message.bot.download_file(file.file_path, buf)
+            val = buf.getvalue()
+            if not val and res and isinstance(res, (bytes, bytearray)):
+                return bytes(res)
+            return val
         except Exception as e:
             logging.warning(f"Standard get_file download failed: {e}. Trying fast MTProto...")
 

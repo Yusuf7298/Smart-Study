@@ -3,7 +3,7 @@ import sqlite3
 import asyncio
 import unittest
 from datetime import datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 TEST_DB_PATH = "test_tutor_bot.db"
 os.environ["DATABASE_PATH"] = TEST_DB_PATH
 from config import DATABASE_PATH
@@ -797,7 +797,7 @@ class TestStudentTutor(unittest.TestCase):
         mock_msg.document.file_size = 1024 * 50
         mock_msg.document.file_id = "doc_file_123"
         mock_msg.bot.get_file = AsyncMock(return_value=AsyncMock(file_path="dummy_path"))
-        mock_msg.bot.download_file = AsyncMock()
+        mock_msg.bot.download_file = AsyncMock(return_value=b"%PDF-1.4 test content")
         mock_msg.answer = AsyncMock()
         
         mock_state = AsyncMock()
@@ -805,7 +805,7 @@ class TestStudentTutor(unittest.TestCase):
         mock_state.update_data = AsyncMock()
         
         with patch("bot.services.pdf_service.process_and_save_pdf", new_callable=AsyncMock) as mock_save:
-            mock_save.return_value = AsyncMock(
+            mock_save.return_value = MagicMock(
                 id=42,
                 title="Biology Final Exam Review",
                 filename="biology_final.pdf",

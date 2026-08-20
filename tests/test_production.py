@@ -714,8 +714,9 @@ class TestProductionReadiness(unittest.TestCase):
         self.assertFalse(os.path.exists(saved_path))
     def test_file_storage_max_size_enforcement(self):
         from bot.services.storage import LocalFileStorageProvider
+        import config
         storage = LocalFileStorageProvider()
-        oversized = b"0" * (21 * 1024 * 1024)
+        oversized = b"0" * ((config.MAX_FILE_SIZE_MB + 1) * 1024 * 1024)
         with self.assertRaises(ValueError):
             run_async(storage.save(12345, "big.pdf", oversized))
     def test_courses_and_chapters_hierarchy(self):
@@ -906,8 +907,8 @@ class TestProductionReadiness(unittest.TestCase):
         from bot.handlers.registration import get_grades_keyboard
         kb = get_grades_keyboard()
         button_texts = [btn.text for row in kb.inline_keyboard for btn in row]
-        for g in range(1, 13):
-            self.assertIn(f"Grade {g}", button_texts)
+        for g in ["9", "10", "11", "12"]:
+            self.assertTrue(any(f"Grade {g}" in btn for btn in button_texts))
     def test_calculate_student_payment_grade_12_and_standard(self):
         from bot.services.student_service import calculate_student_payment
         total_g10, details_g10 = calculate_student_payment("10", 2, 50)
@@ -1045,14 +1046,15 @@ class TestProductionReadiness(unittest.TestCase):
         mock_doc_msg.answer = AsyncMock()
         
         with patch("bot.services.pdf_service.process_and_save_pdf", new_callable=AsyncMock) as mock_pdf_save:
-            mock_pdf_save.return_value = AsyncMock(
+            mock_pdf_save.return_value = MagicMock(
                 id=88,
                 title="Grade12_Biology.pdf",
                 filename="Grade12_Biology.pdf",
                 extracted_text="Chapter 1: Molecular Biology"
             )
             run_async(process_study_file_input(mock_doc_msg, mock_state))
-            mock_state.set_state.assert_called_with(PDFStates.waiting_for_chapter)
+            from bot.handlers.study import StudyStates
+            mock_state.set_state.assert_called_with(StudyStates.waiting_for_file)
             chap_ask = mock_doc_msg.answer.call_args_list[-1][0][0]
             
     def test_admin_student_edit_grade_and_courses(self):

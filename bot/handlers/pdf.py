@@ -88,7 +88,6 @@ def get_exam_topic_continue_keyboard(has_next: bool, next_topic_name: str = "") 
 @router.message(Command("pdf"))
 @router.message(F.text.in_(["📄 Study PDF", "📄 የፒዲኤፍ ጥናት", "📄 Qo'annoo PDF"]))
 async def start_pdf_study(message: Message, state: FSMContext, telegram_id: Optional[int] = None):
-    await state.clear()
     tid = telegram_id or (message.from_user.id if message.from_user else None)
     if not tid:
         return
