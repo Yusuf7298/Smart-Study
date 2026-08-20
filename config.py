@@ -8,7 +8,7 @@ load_dotenv()
 BOT_NAME = os.getenv("BOT_NAME", "Ethio Smart Study")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 raw_gemini_keys = os.getenv("GEMINI_API_KEYS", "") or os.getenv("GEMINI_API_KEY", "")
-GEMINI_API_KEYS = [k.strip() for k in raw_gemini_keys.split(",") if k.strip()]
+GEMINI_API_KEYS = [k.strip().strip('"').strip("'") for k in raw_gemini_keys.split(",") if k.strip()]
 GEMINI_API_KEY = GEMINI_API_KEYS[0] if GEMINI_API_KEYS else ""
 MONGO_URI = os.getenv("MONGO_URI", "") or os.getenv("MONGODB_URI", "")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ethio_smart_study")
