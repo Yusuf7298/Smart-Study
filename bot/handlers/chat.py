@@ -9,6 +9,7 @@ from bot.services.gemini import ask_gemini_with_profile
 from bot.services.i18n import t
 from bot.keyboards.study_input import get_study_actions_keyboard
 from bot.utils import safe_reply, safe_edit
+from typing import Optional
 
 router = Router()
 
