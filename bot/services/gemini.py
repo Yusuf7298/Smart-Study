@@ -4,22 +4,58 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Tuple
-from config import GEMINI_API_KEY, GEMINI_MODEL
+from config import GEMINI_API_KEY, GEMINI_API_KEYS, GEMINI_MODEL
 from bot.database.models import StudentModel, LearningSessionModel
 from bot.utils import clean_telegram_text
 
-client = genai.Client(
-    api_key=GEMINI_API_KEY,
-    http_options={"api_version": "v1"},
-)
+_clients: List[genai.Client] = []
+for k in (GEMINI_API_KEYS or ([GEMINI_API_KEY] if GEMINI_API_KEY else [])):
+    if k:
+        try:
+            _clients.append(genai.Client(api_key=k))
+        except Exception as e:
+            logging.error(f"Failed initializing Gemini client for key: {e}")
+
+if not _clients and GEMINI_API_KEY:
+    _clients = [genai.Client(api_key=GEMINI_API_KEY)]
+
+_current_key_idx = 0
+
+def get_clients_in_rotation() -> List[genai.Client]:
+    """Returns list of clients starting with the current primary key and wrapping around."""
+    global _current_key_idx
+    if not _clients:
+        return [genai.Client(api_key=GEMINI_API_KEY)]
+    n = len(_clients)
+    return [_clients[(i + _current_key_idx) % n] for i in range(n)]
+
+def mark_key_failed(client_instance: genai.Client, error_msg: str):
+    """Rotates the primary key index forward when an error occurs."""
+    global _current_key_idx
+    if not _clients or len(_clients) <= 1:
+        return
+    try:
+        if client_instance in _clients:
+            idx = _clients.index(client_instance)
+            next_idx = (idx + 1) % len(_clients)
+            _current_key_idx = next_idx
+            logging.warning(
+                f"🔄 Gemini API Key #{idx + 1} failed ({error_msg}). "
+                f"Automatically switching primary key to Key #{next_idx + 1} (of {len(_clients)})..."
+            )
+    except Exception:
+        pass
+
+# Default client for legacy access
+client = _clients[0] if _clients else genai.Client(api_key=GEMINI_API_KEY)
 
 MASTER_AI_TUTOR_PROMPT_TEMPLATE = """# ETHIO SMART STUDY — MASTER AI TUTOR PROMPT
 
-You are the core AI teacher for **Ethio Smart Study**, an educational platform built for Ethiopian students from Grade 5 through Grade 12.
+You are the core AI teacher for **Ethio Smart Study**, an educational platform built specifically for Ethiopian secondary and preparatory students from Grade 9 through Grade 12.
 
-Your job is not simply to answer questions. Your job is to **teach, check understanding, identify weaknesses, and prepare the student for examinations**.
+Your job is not simply to answer questions. Your job is to **teach, check understanding, identify weaknesses, and prepare the student for school exams and the ESSLCE National Entrance Exam**.
 
-You are a patient, highly skilled Ethiopian school teacher and exam tutor.
+You are a patient, highly skilled Ethiopian high school teacher and national exam tutor.
 
 ---
 
@@ -45,11 +81,9 @@ Student:
 • Never ask for the student's grade if it already exists.
 • Never ask for their preferred language if it already exists.
 • Never teach above or below the student's registered level unless the learning context explicitly requires it.
-• Grade 5–8 → use simple explanations, familiar examples, short steps and frequent checks.
-• Grade 9–10 → introduce stronger scientific/technical terminology while explaining difficult terms.
-• Grade 11–12 → use academically rigorous explanations, exam terminology, deeper reasoning and application questions.
-• Never make a Grade 5 student read like a university student.
-• Never make a Grade 12 student receive an overly childish explanation.
+• Grade 9–10 → introduce stronger scientific/technical terminology while explaining difficult terms with clear foundations.
+• Grade 11–12 → use academically rigorous explanations, ESSLCE exam terminology, deeper reasoning and national exam-style application questions.
+• Always prepare students for success in Ethiopian high school and national matriculation exams.
 
 ---
 
@@ -783,6 +817,7 @@ class ExamGradingResponse(BaseModel):
     corrections_and_reteach: str = Field(description="Clear explanation of mistakes and re-teaching of misunderstood concepts based only on the material.")
 
 FALLBACK_MODELS = [
+    "gemini-3.6-flash",
     "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
@@ -791,21 +826,51 @@ FALLBACK_MODELS = [
 ]
 
 RETRYABLE_ERROR_TERMS = [
-    "503", "429", "404", "unavailable", "overloaded", "quota", 
+    "503", "429", "404", "401", "403", "unavailable", "overloaded", "quota", 
     "exhausted", "not_found", "not found", "is no longer available", 
-    "resource has been exhausted", "rate limit", "busy"
+    "resource has been exhausted", "rate limit", "busy", "unauthenticated",
+    "permission_denied", "access_token_type_unsupported", "invalid authentication"
 ]
 
 def _is_retryable_error(e: Exception) -> bool:
     err_str = str(e).lower()
     return any(term in err_str for term in RETRYABLE_ERROR_TERMS)
 
+async def execute_gemini_call(call_fn, custom_models: Optional[List[str]] = None):
+    """
+    Executes a Gemini async operation with automatic failover across all configured API keys
+    and fallback models. If an active key encounters rate limits, quota issues, or auth failures,
+    it seamlessly rotates to the next API key in the pool.
+    """
+    models = custom_models or ([GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL])
+    clients_to_try = get_clients_in_rotation()
+    last_error = None
+
+    for active_client in clients_to_try:
+        for model_name in models:
+            try:
+                return await call_fn(active_client, model_name)
+            except Exception as e:
+                if _is_retryable_error(e):
+                    logging.warning(f"Model {model_name} on active key failed ({e}). Trying fallback...")
+                    last_error = e
+                    await asyncio.sleep(0.3)
+                    continue
+                else:
+                    last_error = e
+                    break
+        mark_key_failed(active_client, str(last_error))
+
+    if last_error:
+        raise last_error
+    raise Exception("All configured Gemini API keys and models exhausted.")
+
 def get_system_instruction(student: StudentModel, session: Optional[LearningSessionModel] = None) -> str:
     """
     Generates dynamic system instructions from the Ethio Smart Study Master Prompt,
     injecting the student's profile, active learning session details, and strict security rules.
     """
-    lang = student.preferred_language or "English"
+    lang = (student.preferred_language if student else "English") or "English"
     courses_str = ", ".join(student.selected_courses) if student and student.selected_courses else "All Subjects"
     grade_val = str(student.grade).strip() if student and student.grade else "Not Set"
     is_g12 = grade_val == "12" or "12" in grade_val
@@ -871,46 +936,32 @@ async def ask_gemini_with_profile(
                 msg_text = str(getattr(h, "message"))
                 clean_history.append(types.Content(role=role, parts=[types.Part.from_text(text=msg_text)]))
     
-    last_error = None
-    for model_name in models_to_try:
-        try:
-            chat = client.aio.chats.create(
-                model=model_name,
-                history=clean_history, # type: ignore
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction, # type: ignore
-                    response_mime_type="application/json",
-                    response_schema=TutorResponse,
-                )
+    async def _run_chat(active_client: genai.Client, model_name: str):
+        chat = active_client.aio.chats.create(
+            model=model_name,
+            history=clean_history, # type: ignore
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction, # type: ignore
+                response_mime_type="application/json",
+                response_schema=TutorResponse,
             )
-            response = await chat.send_message(question)
-            
-            parsed = response.parsed
-            if parsed:
-                raw_ans = getattr(parsed, "tutor_response", "") or ""
-                return clean_telegram_text(raw_ans), parsed.extracted_grade, parsed.extracted_language # type: ignore
-            else:
-                import json
-                data = json.loads(response.text) # type: ignore
-                raw_ans = data.get("tutor_response", "") or ""
-                return (
-                    clean_telegram_text(raw_ans),
-                    data.get("extracted_grade"),
-                    data.get("extracted_language")
-                )
-        except Exception as e:
-            if _is_retryable_error(e):
-                logging.warning(f"Model {model_name} failed ({e}). Trying next fallback model...")
-                last_error = e
-                await asyncio.sleep(0.5)
-                continue
-            else:
-                raise e
-                
-    if last_error:
-        raise last_error
-    else:
-        raise Exception("All Gemini models failed to respond.")
+        )
+        response = await chat.send_message(question)
+        parsed = response.parsed
+        if parsed:
+            raw_ans = getattr(parsed, "tutor_response", "") or ""
+            return clean_telegram_text(raw_ans), parsed.extracted_grade, parsed.extracted_language # type: ignore
+        else:
+            import json
+            data = json.loads(response.text) # type: ignore
+            raw_ans = data.get("tutor_response", "") or ""
+            return (
+                clean_telegram_text(raw_ans),
+                data.get("extracted_grade"),
+                data.get("extracted_language")
+            )
+
+    return await execute_gemini_call(_run_chat, models_to_try)
 
 async def ask_gemini(question: str) -> str:
     """Legacy wrapper for sending a single message to Gemini without history or profile."""
@@ -955,64 +1006,51 @@ async def generate_quiz_question(
     )
     
     models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
-    last_error = None
-    
-    for model_name in models_to_try:
-        try:
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=QuizQuestionResponse,
-                )
+
+    async def _run_quiz_gen(active_client: genai.Client, model_name: str):
+        response = await active_client.aio.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=QuizQuestionResponse,
             )
-            parsed = response.parsed
-            if parsed:
-                if hasattr(parsed, "options") and isinstance(parsed.options, dict): # type: ignore
-                    options = {str(k): str(v) for k, v in parsed.options.items()} # type: ignore
-                else:
-                    options = {
-                        "A": str(getattr(parsed, "option_a", "Option A")),
-                        "B": str(getattr(parsed, "option_b", "Option B")),
-                        "C": str(getattr(parsed, "option_c", "Option C")),
-                        "D": str(getattr(parsed, "option_d", "Option D")),
-                    }
-                q_text = str(getattr(parsed, "question", ""))
-                c_ans = str(getattr(parsed, "correct_answer", "A")).strip().upper()
-                expl = str(getattr(parsed, "explanation", ""))
-                return q_text, options, c_ans, expl
+        )
+        parsed = response.parsed
+        if parsed:
+            if hasattr(parsed, "options") and isinstance(parsed.options, dict): # type: ignore
+                options = {str(k): str(v) for k, v in parsed.options.items()} # type: ignore
             else:
-                import json
-                data = json.loads(response.text) # type: ignore
-                if "options" in data and isinstance(data["options"], dict):
-                    options = {str(k): str(v) for k, v in data["options"].items()}
-                else:
-                    options = {
-                        "A": str(data.get("option_a", "Option A")),
-                        "B": str(data.get("option_b", "Option B")),
-                        "C": str(data.get("option_c", "Option C")),
-                        "D": str(data.get("option_d", "Option D")),
-                    }
-                return (
-                    data.get("question", ""),
-                    options,
-                    str(data.get("correct_answer", "A")).strip().upper(),
-                    data.get("explanation", "")
-                )
-        except Exception as e:
-            if _is_retryable_error(e):
-                logging.warning(f"Model {model_name} failed for quiz gen ({e}). Trying next fallback model...")
-                last_error = e
-                await asyncio.sleep(0.5)
-                continue
+                options = {
+                    "A": str(getattr(parsed, "option_a", "Option A")),
+                    "B": str(getattr(parsed, "option_b", "Option B")),
+                    "C": str(getattr(parsed, "option_c", "Option C")),
+                    "D": str(getattr(parsed, "option_d", "Option D")),
+                }
+            q_text = str(getattr(parsed, "question", ""))
+            c_ans = str(getattr(parsed, "correct_answer", "A")).strip().upper()
+            expl = str(getattr(parsed, "explanation", ""))
+            return q_text, options, c_ans, expl
+        else:
+            import json
+            data = json.loads(response.text) # type: ignore
+            if "options" in data and isinstance(data["options"], dict):
+                options = {str(k): str(v) for k, v in data["options"].items()}
             else:
-                raise e
-                
-    if last_error:
-        raise last_error
-    else:
-        raise Exception("All models failed to generate quiz question.")
+                options = {
+                    "A": str(data.get("option_a", "Option A")),
+                    "B": str(data.get("option_b", "Option B")),
+                    "C": str(data.get("option_c", "Option C")),
+                    "D": str(data.get("option_d", "Option D")),
+                }
+            return (
+                data.get("question", ""),
+                options,
+                str(data.get("correct_answer", "A")).strip().upper(),
+                data.get("explanation", "")
+            )
+
+    return await execute_gemini_call(_run_quiz_gen, models_to_try)
 
 async def extract_pdf_topics_and_summary(
     text_excerpt: str,
@@ -1022,9 +1060,10 @@ async def extract_pdf_topics_and_summary(
     """
     Analyzes document text excerpt and returns (title, detected_subject, detected_grade, [topics], summary).
     """
-    lang = student.preferred_language or "English"
+    lang = (student.preferred_language if student else "English") or "English"
+    grade = student.grade if student else "11-12"
     prompt = (
-        f"Analyze the following study document excerpt ({filename}) for a Grade {student.grade} student.\n"
+        f"Analyze the following study document excerpt ({filename}) for a Grade {grade} student.\n"
         f"Document text:\n\"\"\"\n{text_excerpt[:15000]}\n\"\"\"\n\n"
         f"Tasks:\n"
         f"1. Generate a clean title for the document.\n"
@@ -1036,48 +1075,37 @@ async def extract_pdf_topics_and_summary(
     )
     
     models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
-    last_error = None
     
-    for model_name in models_to_try:
-        try:
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=PDFAnalysisResponse,
-                )
+    async def _run_pdf_analysis(active_client: genai.Client, model_name: str):
+        response = await active_client.aio.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=PDFAnalysisResponse,
             )
-            parsed = response.parsed
-            if parsed:
-                return (
-                    parsed.title,
-                    getattr(parsed, "detected_subject", "General"),
-                    getattr(parsed, "detected_grade", None),
-                    parsed.topics,
-                    parsed.summary
-                )
-            else:
-                import json
-                data = json.loads(response.text) # type: ignore
-                return (
-                    data.get("title", filename),
-                    data.get("detected_subject", "General"),
-                    data.get("detected_grade", None),
-                    data.get("topics", ["Key Concepts", "Overview"]),
-                    data.get("summary", "Document analyzed.")
-                )
-        except Exception as e:
-            if _is_retryable_error(e):
-                last_error = e
-                await asyncio.sleep(0.5)
-                continue
-            else:
-                raise e
-                
-    if last_error:
-        raise last_error
-    return filename, "General", None, ["Overview", "Key Concepts"], "Document uploaded and ready for study."
+        )
+        parsed = response.parsed
+        if parsed:
+            return (
+                parsed.title,
+                getattr(parsed, "detected_subject", "General"),
+                getattr(parsed, "detected_grade", None),
+                parsed.topics,
+                parsed.summary
+            )
+        else:
+            import json
+            data = json.loads(response.text) # type: ignore
+            return (
+                data.get("title", filename),
+                data.get("detected_subject", "General"),
+                data.get("detected_grade", None),
+                data.get("topics", ["Key Concepts", "Overview"]),
+                data.get("summary", "Document analyzed.")
+            )
+
+    return await execute_gemini_call(_run_pdf_analysis, models_to_try)
 
 async def ask_gemini_with_pdf_context(
     question: str,
@@ -1102,26 +1130,15 @@ async def ask_gemini_with_pdf_context(
     )
     
     models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
-    last_error = None
-    
-    for model_name in models_to_try:
-        try:
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt
-            )
-            return response.text or "I could not find a specific answer in the document."
-        except Exception as e:
-            if _is_retryable_error(e):
-                last_error = e
-                await asyncio.sleep(0.5)
-                continue
-            else:
-                raise e
-                
-    if last_error:
-        raise last_error
-    return "Error connecting to AI service."
+
+    async def _run_pdf_qa(active_client: genai.Client, model_name: str):
+        response = await active_client.aio.models.generate_content(
+            model=model_name,
+            contents=prompt
+        )
+        return response.text or "I could not find a specific answer in the document."
+
+    return await execute_gemini_call(_run_pdf_qa, models_to_try)
 
 async def generate_pdf_quiz_question(
     pdf_text: str,
@@ -1147,62 +1164,51 @@ async def generate_pdf_quiz_question(
     )
     
     models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
-    last_error = None
-    
-    for model_name in models_to_try:
-        try:
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json", # type: ignore
-                    response_schema=QuizQuestionResponse,
-                )
+
+    async def _run_pdf_quiz_gen(active_client: genai.Client, model_name: str):
+        response = await active_client.aio.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json", # type: ignore
+                response_schema=QuizQuestionResponse,
             )
-            parsed = response.parsed
-            if parsed:
-                if hasattr(parsed, "options") and isinstance(parsed.options, dict): # type: ignore
-                    options = {str(k): str(v) for k, v in parsed.options.items()} # type: ignore
-                else:
-                    options = {
-                        "A": str(getattr(parsed, "option_a", "Option A")),
-                        "B": str(getattr(parsed, "option_b", "Option B")),
-                        "C": str(getattr(parsed, "option_c", "Option C")),
-                        "D": str(getattr(parsed, "option_d", "Option D")),
-                    }
-                q_text = str(getattr(parsed, "question", ""))
-                c_ans = str(getattr(parsed, "correct_answer", "A")).strip().upper()
-                expl = str(getattr(parsed, "explanation", ""))
-                return q_text, options, c_ans, expl
+        )
+        parsed = response.parsed
+        if parsed:
+            if hasattr(parsed, "options") and isinstance(parsed.options, dict): # type: ignore
+                options = {str(k): str(v) for k, v in parsed.options.items()} # type: ignore
             else:
-                import json
-                data = json.loads(response.text) # type: ignore
-                if "options" in data and isinstance(data["options"], dict):
-                    options = {str(k): str(v) for k, v in data["options"].items()}
-                else:
-                    options = {
-                        "A": str(data.get("option_a", "Option A")),
-                        "B": str(data.get("option_b", "Option B")),
-                        "C": str(data.get("option_c", "Option C")),
-                        "D": str(data.get("option_d", "Option D")),
-                    }
-                return (
-                    data.get("question", ""),
-                    options,
-                    str(data.get("correct_answer", "A")).strip().upper(),
-                    data.get("explanation", "")
-                )
-        except Exception as e:
-            if _is_retryable_error(e):
-                last_error = e
-                await asyncio.sleep(0.5)
-                continue
+                options = {
+                    "A": str(getattr(parsed, "option_a", "Option A")),
+                    "B": str(getattr(parsed, "option_b", "Option B")),
+                    "C": str(getattr(parsed, "option_c", "Option C")),
+                    "D": str(getattr(parsed, "option_d", "Option D")),
+                }
+            q_text = str(getattr(parsed, "question", ""))
+            c_ans = str(getattr(parsed, "correct_answer", "A")).strip().upper()
+            expl = str(getattr(parsed, "explanation", ""))
+            return q_text, options, c_ans, expl
+        else:
+            import json
+            data = json.loads(response.text) # type: ignore
+            if "options" in data and isinstance(data["options"], dict):
+                options = {str(k): str(v) for k, v in data["options"].items()}
             else:
-                raise e
-                
-    if last_error:
-        raise last_error
-    raise Exception("Failed to generate PDF quiz question.")
+                options = {
+                    "A": str(data.get("option_a", "Option A")),
+                    "B": str(data.get("option_b", "Option B")),
+                    "C": str(data.get("option_c", "Option C")),
+                    "D": str(data.get("option_d", "Option D")),
+                }
+            return (
+                data.get("question", ""),
+                options,
+                str(data.get("correct_answer", "A")).strip().upper(),
+                data.get("explanation", "")
+            )
+
+    return await execute_gemini_call(_run_pdf_quiz_gen, models_to_try)
 
 async def grade_written_test(
     questions_text: str,
@@ -1235,52 +1241,41 @@ async def grade_written_test(
     )
     
     models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
-    last_error = None
-    
-    for model_name in models_to_try:
-        try:
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=TestEvaluationResponse,
-                )
+
+    async def _run_grade_test(active_client: genai.Client, model_name: str):
+        response = await active_client.aio.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=TestEvaluationResponse,
             )
-            parsed = response.parsed
-            if parsed:
-                return (
-                    parsed.score, # type: ignore
-                    parsed.letter_grade, # type: ignore
-                    clean_telegram_text(str(parsed.strengths)), # type: ignore
-                    clean_telegram_text(str(parsed.weaknesses)), # type: ignore
-                    clean_telegram_text(str(parsed.corrections)), # type: ignore
-                    clean_telegram_text(str(parsed.recommendations)), # type: ignore
-                    clean_telegram_text(str(parsed.formatted_feedback)) # type: ignore
-                )
-            else:
-                import json
-                data = json.loads(response.text) # type: ignore
-                return (
-                    int(data.get("score", 8)),
-                    str(data.get("letter_grade", "B")),
-                    clean_telegram_text(str(data.get("strengths", "Good effort"))),
-                    clean_telegram_text(str(data.get("weaknesses", "None"))),
-                    clean_telegram_text(str(data.get("corrections", "Review topic"))),
-                    clean_telegram_text(str(data.get("recommendations", "Keep practicing"))),
-                    clean_telegram_text(str(data.get("formatted_feedback", "Test completed.")))
-                )
-        except Exception as e:
-            if _is_retryable_error(e):
-                last_error = e
-                await asyncio.sleep(0.5)
-                continue
-            else:
-                raise e
-                
-    if last_error:
-        raise last_error
-    return 7, "B", "Good attempt", "", "", "Keep reviewing", "Test graded."
+        )
+        parsed = response.parsed
+        if parsed:
+            return (
+                parsed.score, # type: ignore
+                parsed.letter_grade, # type: ignore
+                clean_telegram_text(str(parsed.strengths)), # type: ignore
+                clean_telegram_text(str(parsed.weaknesses)), # type: ignore
+                clean_telegram_text(str(parsed.corrections)), # type: ignore
+                clean_telegram_text(str(parsed.recommendations)), # type: ignore
+                clean_telegram_text(str(parsed.formatted_feedback)) # type: ignore
+            )
+        else:
+            import json
+            data = json.loads(response.text) # type: ignore
+            return (
+                int(data.get("score", 8)),
+                str(data.get("letter_grade", "B")),
+                clean_telegram_text(str(data.get("strengths", "Good effort"))),
+                clean_telegram_text(str(data.get("weaknesses", "None"))),
+                clean_telegram_text(str(data.get("corrections", "Review topic"))),
+                clean_telegram_text(str(data.get("recommendations", "Keep practicing"))),
+                clean_telegram_text(str(data.get("formatted_feedback", "Test completed.")))
+            )
+
+    return await execute_gemini_call(_run_grade_test, models_to_try)
 
 async def generate_exam_chapter_topics(
     material_text: str,
@@ -1302,37 +1297,32 @@ async def generate_exam_chapter_topics(
         f"- Output topic names in {lang}."
     )
     models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
-    last_error = None
-    
-    for model_name in models_to_try:
-        try:
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=ExamTopicListResponse,
-                )
+
+    async def _run_exam_topics(active_client: genai.Client, model_name: str):
+        response = await active_client.aio.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ExamTopicListResponse,
             )
-            parsed = response.parsed
-            if parsed and parsed.topics:
-                return [clean_telegram_text(t) for t in parsed.topics if t.strip()]
-            else:
-                import json
-                data = json.loads(response.text) # type: ignore
-                topics = data.get("topics", [])
-                if topics:
-                    return [clean_telegram_text(t) for t in topics if t.strip()]
-        except Exception as e:
-            if _is_retryable_error(e):
-                last_error = e
-                await asyncio.sleep(0.5)
-                continue
-            else:
-                raise e
-    if last_error:
-        logging.warning(f"Error extracting chapter topics: {last_error}")
-    return [f"{chapter_name} - Core Concepts", f"{chapter_name} - Advanced Applications"]
+        )
+        parsed = response.parsed
+        if parsed and parsed.topics:
+            return [clean_telegram_text(t) for t in parsed.topics if t.strip()]
+        else:
+            import json
+            data = json.loads(response.text) # type: ignore
+            topics = data.get("topics", [])
+            if topics:
+                return [clean_telegram_text(t) for t in topics if t.strip()]
+        return [f"{chapter_name} - Core Concepts", f"{chapter_name} - Advanced Applications"]
+
+    try:
+        return await execute_gemini_call(_run_exam_topics, models_to_try)
+    except Exception as e:
+        logging.warning(f"Error extracting chapter topics: {e}")
+        return [f"{chapter_name} - Core Concepts", f"{chapter_name} - Advanced Applications"]
 
 async def generate_exam_topic_lesson(
     material_text: str,
@@ -1369,62 +1359,44 @@ async def generate_exam_topic_lesson(
         f"4. Output all text in {lang}."
     )
     models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
-    last_error = None
-    
-    for model_name in models_to_try:
-        try:
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=ExamTopicLessonResponse,
-                )
+
+    async def _run_topic_lesson(active_client: genai.Client, model_name: str):
+        response = await active_client.aio.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ExamTopicLessonResponse,
             )
-            parsed = response.parsed
-            if parsed:
-                short_notes = clean_telegram_text(parsed.short_notes)
-                mcq_list = []
-                questions_rendered = []
-                for idx, q in enumerate(parsed.mcqs, 1):
-                    q_data = {
-                        "number": idx,
-                        "question": clean_telegram_text(q.question),
-                        "option_a": clean_telegram_text(q.option_a),
-                        "option_b": clean_telegram_text(q.option_b),
-                        "option_c": clean_telegram_text(q.option_c),
-                        "option_d": clean_telegram_text(q.option_d),
-                        "correct_answer": str(q.correct_answer).strip().upper(),
-                        "explanation": clean_telegram_text(q.explanation)
-                    }
-                    mcq_list.append(q_data)
-                    q_text = (
-                        f"{idx}. {q_data['question']}\n"
-                        f"A) {q_data['option_a']}\n"
-                        f"B) {q_data['option_b']}\n"
-                        f"C) {q_data['option_c']}\n"
-                        f"D) {q_data['option_d']}"
-                    )
-                    questions_rendered.append(q_text)
-                    
-                formatted_lesson = (
-                    f"📖 *Step 1 — Short Notes: {topic_name}*\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"{short_notes}\n\n"
-                    f"━━━━━━━━━━━━━━━━━━━━\n"
-                    f"💡 Read the notes above, then tap *▶️ Start 10 Questions* below to practice!"
-                )
-                return formatted_lesson, mcq_list
-        except Exception as e:
-            if _is_retryable_error(e):
-                last_error = e
-                await asyncio.sleep(0.5)
-                continue
-            else:
-                raise e
-    if last_error:
-        raise last_error
-    raise Exception("Failed to generate exam topic lesson.")
+        )
+        parsed = response.parsed
+        if parsed:
+            short_notes = clean_telegram_text(parsed.short_notes)
+            mcq_list = []
+            for idx, q in enumerate(parsed.mcqs, 1):
+                q_data = {
+                    "number": idx,
+                    "question": clean_telegram_text(q.question),
+                    "option_a": clean_telegram_text(q.option_a),
+                    "option_b": clean_telegram_text(q.option_b),
+                    "option_c": clean_telegram_text(q.option_c),
+                    "option_d": clean_telegram_text(q.option_d),
+                    "correct_answer": str(q.correct_answer).strip().upper(),
+                    "explanation": clean_telegram_text(q.explanation)
+                }
+                mcq_list.append(q_data)
+                
+            formatted_lesson = (
+                f"📖 *Step 1 — Short Notes: {topic_name}*\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"{short_notes}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"💡 Read the notes above, then tap *▶️ Start 10 Questions* below to practice!"
+            )
+            return formatted_lesson, mcq_list
+        raise Exception("Failed to parse topic lesson.")
+
+    return await execute_gemini_call(_run_topic_lesson, models_to_try)
 
 async def grade_exam_topic_answers(
     material_text: str,
@@ -1455,39 +1427,29 @@ async def grade_exam_topic_answers(
         f"5. Maintain an inspiring, patient, academic tone and output all text in {lang}."
     )
     models_to_try = [GEMINI_MODEL] + [m for m in FALLBACK_MODELS if m != GEMINI_MODEL]
-    last_error = None
-    
-    for model_name in models_to_try:
-        try:
-            response = await client.aio.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=ExamGradingResponse,
-                )
+
+    async def _run_grade_exam(active_client: genai.Client, model_name: str):
+        response = await active_client.aio.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ExamGradingResponse,
             )
-            parsed = response.parsed
-            if parsed:
-                return (
-                    parsed.score,
-                    clean_telegram_text(parsed.detailed_results),
-                    clean_telegram_text(parsed.corrections_and_reteach)
-                )
-            else:
-                data = json.loads(response.text) # type: ignore
-                return (
-                    int(data.get("score", 7)),
-                    clean_telegram_text(str(data.get("detailed_results", ""))),
-                    clean_telegram_text(str(data.get("corrections_and_reteach", "")))
-                )
-        except Exception as e:
-            if _is_retryable_error(e):
-                last_error = e
-                await asyncio.sleep(0.5)
-                continue
-            else:
-                raise e
-    if last_error:
-        raise last_error
-    return 7, "Answers evaluated.", "Keep studying the material."
+        )
+        parsed = response.parsed
+        if parsed:
+            return (
+                parsed.score,
+                clean_telegram_text(parsed.detailed_results),
+                clean_telegram_text(parsed.corrections_and_reteach)
+            )
+        else:
+            data = json.loads(response.text) # type: ignore
+            return (
+                int(data.get("score", 7)),
+                clean_telegram_text(str(data.get("detailed_results", ""))),
+                clean_telegram_text(str(data.get("corrections_and_reteach", "")))
+            )
+
+    return await execute_gemini_call(_run_grade_exam, models_to_try)

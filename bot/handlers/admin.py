@@ -156,16 +156,12 @@ async def admin_pricing_prompt(event: Message | CallbackQuery, state: FSMContext
     
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Grade 5", callback_data="admin_pgrade_5"),
-            InlineKeyboardButton(text="Grade 6", callback_data="admin_pgrade_6"),
-            InlineKeyboardButton(text="Grade 7", callback_data="admin_pgrade_7"),
-            InlineKeyboardButton(text="Grade 8", callback_data="admin_pgrade_8")
+            InlineKeyboardButton(text="🎓 Grade 9", callback_data="admin_pgrade_9"),
+            InlineKeyboardButton(text="🎓 Grade 10", callback_data="admin_pgrade_10")
         ],
         [
-            InlineKeyboardButton(text="Grade 9", callback_data="admin_pgrade_9"),
-            InlineKeyboardButton(text="Grade 10", callback_data="admin_pgrade_10"),
-            InlineKeyboardButton(text="Grade 11", callback_data="admin_pgrade_11"),
-            InlineKeyboardButton(text="Grade 12", callback_data="admin_pgrade_12")
+            InlineKeyboardButton(text="🎓 Grade 11", callback_data="admin_pgrade_11"),
+            InlineKeyboardButton(text="🎓 Grade 12", callback_data="admin_pgrade_12")
         ],
         [InlineKeyboardButton(text="🌐 Default Price (All Grades)", callback_data="admin_pgrade_DEFAULT")],
         [InlineKeyboardButton(text="🔙 Back to Dashboard", callback_data="admin_back")]
@@ -457,20 +453,12 @@ def get_admin_grades_keyboard(student_id: int) -> InlineKeyboardMarkup:
     """Returns grade selection grid for admin to set student grade."""
     buttons = [
         [
-            InlineKeyboardButton(text="Grade 5", callback_data=f"admin_setgrade_{student_id}_5"),
-            InlineKeyboardButton(text="Grade 6", callback_data=f"admin_setgrade_{student_id}_6"),
-            InlineKeyboardButton(text="Grade 7", callback_data=f"admin_setgrade_{student_id}_7"),
-            InlineKeyboardButton(text="Grade 8", callback_data=f"admin_setgrade_{student_id}_8")
+            InlineKeyboardButton(text="🎓 Grade 9", callback_data=f"admin_setgrade_{student_id}_9"),
+            InlineKeyboardButton(text="🎓 Grade 10", callback_data=f"admin_setgrade_{student_id}_10")
         ],
         [
-            InlineKeyboardButton(text="Grade 9", callback_data=f"admin_setgrade_{student_id}_9"),
-            InlineKeyboardButton(text="Grade 10", callback_data=f"admin_setgrade_{student_id}_10"),
-            InlineKeyboardButton(text="Grade 11", callback_data=f"admin_setgrade_{student_id}_11"),
-            InlineKeyboardButton(text="Grade 12", callback_data=f"admin_setgrade_{student_id}_12")
-        ],
-        [
-            InlineKeyboardButton(text="College", callback_data=f"admin_setgrade_{student_id}_College"),
-            InlineKeyboardButton(text="University", callback_data=f"admin_setgrade_{student_id}_University")
+            InlineKeyboardButton(text="🎓 Grade 11", callback_data=f"admin_setgrade_{student_id}_11"),
+            InlineKeyboardButton(text="🎓 Grade 12", callback_data=f"admin_setgrade_{student_id}_12")
         ],
         [
             InlineKeyboardButton(text="🔙 Cancel", callback_data=f"admin_manage_{student_id}")

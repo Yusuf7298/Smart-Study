@@ -7,11 +7,13 @@ load_dotenv()
 
 BOT_NAME = os.getenv("BOT_NAME", "Ethio Smart Study")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+raw_gemini_keys = os.getenv("GEMINI_API_KEYS", "") or os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEYS = [k.strip() for k in raw_gemini_keys.split(",") if k.strip()]
+GEMINI_API_KEY = GEMINI_API_KEYS[0] if GEMINI_API_KEYS else ""
 MONGO_URI = os.getenv("MONGO_URI", "") or os.getenv("MONGODB_URI", "")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "ethio_smart_study")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "tutor_bot.db")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 raw_admins = os.getenv("ADMIN_IDS", "8223004316")
 ADMIN_IDS = []
@@ -21,7 +23,10 @@ for x in raw_admins.split(","):
         ADMIN_IDS.append(int(x_clean))
 if not ADMIN_IDS:
     ADMIN_IDS = [8223004316]
-MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
+MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "500"))
+LOCAL_BOT_API_URL = os.getenv("LOCAL_BOT_API_URL", "").strip()
+TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID", "").strip()
+TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH", "").strip()
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(os.getcwd(), "data", "uploads"))
 PAYMENT_RECEIPTS_DIR = os.getenv("PAYMENT_RECEIPTS_DIR", os.path.join(os.getcwd(), "data", "receipts"))
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "20"))

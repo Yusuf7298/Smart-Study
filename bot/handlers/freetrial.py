@@ -25,16 +25,12 @@ class FreeTrialStates(StatesGroup):
 def get_trial_grade_keyboard(lang: str = "English") -> InlineKeyboardMarkup:
     buttons = [
         [
-            InlineKeyboardButton(text="Grade 5", callback_data="trial_grade_5"),
-            InlineKeyboardButton(text="Grade 6", callback_data="trial_grade_6"),
-            InlineKeyboardButton(text="Grade 7", callback_data="trial_grade_7"),
-            InlineKeyboardButton(text="Grade 8", callback_data="trial_grade_8")
+            InlineKeyboardButton(text="🎓 Grade 9", callback_data="trial_grade_9"),
+            InlineKeyboardButton(text="🎓 Grade 10", callback_data="trial_grade_10")
         ],
         [
-            InlineKeyboardButton(text="Grade 9", callback_data="trial_grade_9"),
-            InlineKeyboardButton(text="Grade 10", callback_data="trial_grade_10"),
-            InlineKeyboardButton(text="Grade 11", callback_data="trial_grade_11"),
-            InlineKeyboardButton(text="Grade 12", callback_data="trial_grade_12")
+            InlineKeyboardButton(text="🎓 Grade 11", callback_data="trial_grade_11"),
+            InlineKeyboardButton(text="🎓 Grade 12", callback_data="trial_grade_12")
         ],
         [InlineKeyboardButton(text=t("btn_cancel", lang), callback_data="trial_cancel")]
     ]

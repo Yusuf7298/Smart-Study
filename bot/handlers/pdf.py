@@ -11,6 +11,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 
 import config
 from bot.services import student_service, pdf_service, learning_service, quiz_service, conversation_service
+from bot.services.telegram_downloader import download_file_bytes
 from bot.services import gemini as gemini_service
 from bot.services.i18n import t
 from bot.keyboards.study_input import get_study_actions_keyboard
@@ -179,16 +180,16 @@ async def process_pdf_document_upload(message: Message, state: FSMContext):
         return
         
     if doc.file_size and doc.file_size > (config.MAX_FILE_SIZE_MB * 1024 * 1024):
-        await safe_reply(message, t("pdf_size_error", lang))
+        await safe_reply(message, t("pdf_size_error", lang, max_size=config.MAX_FILE_SIZE_MB))
         return
         
     processing_msg = await message.answer(t("pdf_processing", lang))
     
     try:
-        file = await message.bot.get_file(doc.file_id)
-        file_bytes_io = io.BytesIO()
-        await message.bot.download_file(file.file_path, file_bytes_io)
-        pdf_bytes = file_bytes_io.getvalue()
+        pdf_bytes = await download_file_bytes(message, doc, status_message=processing_msg)
+        if not pdf_bytes:
+            await safe_edit(processing_msg, t("ai_error", lang))
+            return
         
         material = await pdf_service.process_and_save_pdf(
             telegram_id=telegram_id,

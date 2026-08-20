@@ -15,6 +15,7 @@ from aiogram.types import (
 
 import config
 from bot.services import student_service
+from bot.services.telegram_downloader import download_file_bytes
 from bot.services.i18n import t, get_subject_name_in_lang, get_stream_name_in_lang
 from bot.utils import safe_edit, safe_reply
 
@@ -49,22 +50,12 @@ def get_phone_keyboard(lang: str = "English") -> ReplyKeyboardMarkup:
 def get_grades_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [
-            InlineKeyboardButton(text="Grade 1", callback_data="reg_grade_1"),
-            InlineKeyboardButton(text="Grade 2", callback_data="reg_grade_2"),
-            InlineKeyboardButton(text="Grade 3", callback_data="reg_grade_3"),
-            InlineKeyboardButton(text="Grade 4", callback_data="reg_grade_4")
+            InlineKeyboardButton(text="🎓 Grade 9", callback_data="reg_grade_9"),
+            InlineKeyboardButton(text="🎓 Grade 10", callback_data="reg_grade_10")
         ],
         [
-            InlineKeyboardButton(text="Grade 5", callback_data="reg_grade_5"),
-            InlineKeyboardButton(text="Grade 6", callback_data="reg_grade_6"),
-            InlineKeyboardButton(text="Grade 7", callback_data="reg_grade_7"),
-            InlineKeyboardButton(text="Grade 8", callback_data="reg_grade_8")
-        ],
-        [
-            InlineKeyboardButton(text="Grade 9", callback_data="reg_grade_9"),
-            InlineKeyboardButton(text="Grade 10", callback_data="reg_grade_10"),
-            InlineKeyboardButton(text="Grade 11", callback_data="reg_grade_11"),
-            InlineKeyboardButton(text="Grade 12", callback_data="reg_grade_12")
+            InlineKeyboardButton(text="🎓 Grade 11", callback_data="reg_grade_11"),
+            InlineKeyboardButton(text="🎓 Grade 12", callback_data="reg_grade_12")
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -471,20 +462,28 @@ async def process_payment_screenshot(message: Message, state: FSMContext):
     if not file_id:
         await safe_reply(message, "Please upload a valid image or PDF screenshot of your payment receipt.")
         return
+
+    if message.document and message.document.file_size and message.document.file_size > (config.MAX_FILE_SIZE_MB * 1024 * 1024):
+        await safe_reply(message, t("pdf_size_error", lang, max_size=config.MAX_FILE_SIZE_MB))
+        return
         
     thinking = await message.answer("⏳ Processing your payment receipt...")
     
     try:
         os.makedirs(config.PAYMENT_RECEIPTS_DIR, exist_ok=True)
-        file = await message.bot.get_file(file_id)
-        file_ext = os.path.splitext(file.file_path)[1] if file.file_path else ".jpg"
+        file_bytes = await download_file_bytes(message, file_id)
+        if not file_bytes:
+            await safe_edit(thinking, "❌ Failed to download the payment screenshot. Please try uploading again.")
+            return
+
+        file_ext = ".jpg"
+        if message.document and message.document.file_name:
+            file_ext = os.path.splitext(message.document.file_name)[1] or ".jpg"
+
         save_filename = f"receipt_{telegram_id}_{int(datetime.utcnow().timestamp())}{file_ext}"
         save_path = os.path.join(config.PAYMENT_RECEIPTS_DIR, save_filename)
-        
-        file_bytes = io.BytesIO()
-        await message.bot.download_file(file.file_path, file_bytes)
         with open(save_path, "wb") as f:
-            f.write(file_bytes.getvalue())
+            f.write(file_bytes)
             
         await student_service.submit_payment_screenshot(telegram_id, file_id, save_path)
         await state.clear()

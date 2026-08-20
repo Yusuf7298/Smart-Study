@@ -13,6 +13,7 @@ from google.genai import types
 
 import config
 from bot.services import student_service, learning_service, conversation_service, quiz_service, pdf_service
+from bot.services.telegram_downloader import download_file_bytes
 from bot.services.gemini import ask_gemini_with_profile
 from bot.keyboards.study_input import get_study_input_keyboard, get_study_actions_keyboard, get_study_methods_keyboard
 from bot.services.i18n import t
@@ -459,13 +460,26 @@ async def process_study_file_input(message: Message, state: FSMContext):
         is_pdf_doc = bool(doc and ((isinstance(mime, str) and mime == "application/pdf") or (isinstance(fname, str) and fname.lower().endswith(".pdf"))))
 
         if is_pdf_doc:
-            file = await message.bot.get_file(doc.file_id)
-            file_bytes = io.BytesIO()
-            await message.bot.download_file(file.file_path, file_bytes)
+            if doc.file_size and doc.file_size > (config.MAX_FILE_SIZE_MB * 1024 * 1024):
+                try:
+                    await thinking_msg.delete()
+                except Exception:
+                    pass
+                await safe_reply(message, t("pdf_size_error", lang, max_size=config.MAX_FILE_SIZE_MB))
+                return
+
+            pdf_bytes = await download_file_bytes(message, doc, status_message=thinking_msg)
+            if not pdf_bytes:
+                try:
+                    await thinking_msg.delete()
+                except Exception:
+                    pass
+                await safe_reply(message, t("ai_error", lang))
+                return
             
             material = await pdf_service.process_and_save_pdf(
                 telegram_id=telegram_id,
-                pdf_bytes=file_bytes.getvalue(),
+                pdf_bytes=pdf_bytes,
                 original_filename=doc.file_name or "document.pdf",
                 file_id=doc.file_id,
                 student=student

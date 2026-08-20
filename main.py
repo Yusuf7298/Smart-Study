@@ -8,9 +8,10 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
     TelegramNetworkError,
 )
-from aiogram.types import ErrorEvent
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 
-from config import BOT_TOKEN, validate_environment
+from config import BOT_TOKEN, LOCAL_BOT_API_URL, validate_environment
 from bot.handlers.start import router as start_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.study import router as study_router
@@ -64,7 +65,14 @@ async def main():
     except ValueError as ve:
         logging.warning(f"Environment validation note: {ve}")
     await init_database()
-    bot = Bot(token=BOT_TOKEN) # type: ignore
+    session = AiohttpSession(timeout=300)
+    if LOCAL_BOT_API_URL:
+        server = TelegramAPIServer.from_base(LOCAL_BOT_API_URL, is_local=True)
+        session = AiohttpSession(api=server, timeout=300)
+        bot = Bot(token=BOT_TOKEN, session=session)  # type: ignore
+        logging.info(f"Using Local Telegram Bot API Server at {LOCAL_BOT_API_URL} (enables files up to 2000 MB).")
+    else:
+        bot = Bot(token=BOT_TOKEN, session=session)  # type: ignore
     dp = Dispatcher()
     dp.error.register(global_error_handler)
     dp.message.middleware(RateLimitMiddleware())
@@ -92,7 +100,8 @@ async def main():
         try:
             logging.info("Starting Ethio Smart Study Bot polling...")
             await dp.start_polling(bot, handle_signals=True)
-            break
+            logging.warning("Aiogram polling cycle ended. Automatically reconnecting in 2s...")
+            await asyncio.sleep(2)
         except (KeyboardInterrupt, SystemExit):
             logging.info("Ethio Smart Study Bot stopped gracefully.")
             break
